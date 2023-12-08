@@ -1,0 +1,5 @@
+{
+    "cborHex": "47460100002224a3",
+    "description": "Staking Validator",
+    "type": "PlutusScriptV2"
+}
