@@ -1,4 +1,4 @@
-# Revision history for my-first-flake
+# Revision history for single-asset-staking
 
 ## 0.1.0.0 -- YYYY-mm-dd
 

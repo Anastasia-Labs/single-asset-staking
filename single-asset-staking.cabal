@@ -13,20 +13,13 @@ version:            0.1.0.0
 
 -- The license under which the package is released.
 -- license:
-author:             SolidSnake
-maintainer:         solid@snake
+author:             Hade
+maintainer:         hadelive
 
 -- A copyright notice.
 -- copyright:
 -- category:
 extra-source-files: CHANGELOG.md
-
-flag optimized
-  description:
-    If optimized is True, some checks are disabled. Disable checks to create optimized scripts.
-
-  default:     False
-  manual:      True
 
 common lang
   ghc-options:
@@ -100,7 +93,36 @@ common lang
 
   default-language:   GHC2021
 
-common dependencies
+common test-dependencies
+  build-depends:
+    , base
+    , bytestring
+    , hedgehog
+    , hedgehog-quickcheck
+    , liqwid-plutarch-extra
+    , plutarch
+    , plutarch-context-builder
+    , plutarch-extra
+    , plutarch-quickcheck
+    , plutarch-unit
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , tasty
+    , tasty-hedgehog
+    , tasty-hunit
+    , text
+
+library
+  import:          lang
+  exposed-modules:
+    Plutarch.Classes
+    Plutarch.Constants
+    Plutarch.Helpers
+    Plutarch.LinkedList
+    Plutarch.Types
+    Plutarch.Utils
+
   build-depends:
     , aeson
     , aeson-pretty
@@ -108,11 +130,8 @@ common dependencies
     , base16-bytestring
     , bytestring
     , cardano-binary
-    , cborg
     , data-default
-    , directory
     , liqwid-plutarch-extra
-    , liqwid-script-export
     , plutarch
     , plutarch-extra
     , plutus-core
@@ -120,29 +139,8 @@ common dependencies
     , plutus-tx
     , ply-core
     , ply-plutarch
+    , prettyprinter
     , serialise
     , text
 
-library
-  import:          lang, dependencies
-  exposed-modules: Staking
-  other-modules:   Conversions
   hs-source-dirs:  src
-
-  if flag(optimized)
-    hs-source-dirs: src-optimized
-
-  else
-    hs-source-dirs: src-checked
-
-executable single-asset-staking
-  import:         lang, dependencies
-  main-is:        Main.hs
-
-  -- Modules included in this executable, other than Main.
-  -- other-modules:
-
-  -- LANGUAGE extensions used by modules in this package.
-  -- other-extensions:
-  build-depends:  single-asset-staking
-  hs-source-dirs: app
