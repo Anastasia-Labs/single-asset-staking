@@ -126,15 +126,16 @@ common dependencies
 library
   import:          lang, dependencies
   exposed-modules:
-    Types.Classes
-    Types.Constants
-    Types.StakingSet
-    Utils
     Mint.Common
     Mint.Helpers
     Mint.Standard
     MultiFold
+    Types.Classes
+    Types.Constants
+    Types.StakingSet
+    Utils
     Validator
+
   other-modules:   Conversions
   hs-source-dirs:  src
 

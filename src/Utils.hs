@@ -6,10 +6,12 @@ module Utils where
 
 import Data.Text qualified as T
 import Plutarch.Api.V1 (AmountGuarantees (Positive), KeyGuarantees (Sorted), PCredential (PPubKeyCredential, PScriptCredential))
-import Plutarch.Api.V1.Scripts (PScriptHash)
-import Plutarch.Api.V1.Value (padaSymbol, pvalueOf, pnormalize)
 import Plutarch.Api.V1.AssocMap qualified as AssocMap
+import Plutarch.Api.V1.Scripts (PScriptHash)
+import Plutarch.Api.V1.Value (padaSymbol, pnormalize, pvalueOf)
 
+import Plutarch.Api.V1 (AmountGuarantees (..))
+import Plutarch.Api.V1.Value qualified as Value
 import Plutarch.Api.V2 (
   PAddress,
   PCurrencySymbol,
@@ -22,12 +24,10 @@ import Plutarch.Api.V2 (
   PValue (..),
  )
 import Plutarch.Bool (pand')
-import "liqwid-plutarch-extra" Plutarch.Extra.List (plookupAssoc)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import Plutarch.Api.V1 (AmountGuarantees(..))
-import qualified Plutarch.Api.V1.Value as Value
+import "liqwid-plutarch-extra" Plutarch.Extra.List (plookupAssoc)
+import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
 
 data PTriple (a :: PType) (b :: PType) (c :: PType) (s :: S)
   = PTriple (Term s a) (Term s b) (Term s c)
@@ -77,15 +77,15 @@ pcountScriptInputs :: Term s (PBuiltinList PTxInInfo :--> PInteger)
 pcountScriptInputs =
   phoistAcyclic $
     let go :: Term s (PInteger :--> PBuiltinList PTxInInfo :--> PInteger)
-        go = pfix #$ plam $ \self n -> 
-              pelimList 
-                (\x xs -> 
-                  let cred = pfield @"credential" # (pfield @"address" # (pfield @"resolved" # x))
-                   in pmatch cred $ \case 
-                        PScriptCredential _ -> self # (n + 1) # xs
-                        _ -> self # n # xs
-                )
-                n
+        go = pfix #$ plam $ \self n ->
+          pelimList
+            ( \x xs ->
+                let cred = pfield @"credential" # (pfield @"address" # (pfield @"resolved" # x))
+                 in pmatch cred $ \case
+                      PScriptCredential _ -> self # (n + 1) # xs
+                      _ -> self # n # xs
+            )
+            n
      in go # 0
 
 pfoldl2 ::
@@ -104,7 +104,7 @@ pfoldl2 =
         (pif (pnull # lb) acc perror)
         la
 
-pelemAtWithRest' :: PListLike list => PElemConstraint list a => Term s (PInteger :--> list a :--> PPair a (list a))
+pelemAtWithRest' :: (PListLike list) => (PElemConstraint list a) => Term s (PInteger :--> list a :--> PPair a (list a))
 pelemAtWithRest' = phoistAcyclic $
   pfix #$ plam $ \self n xs ->
     pif
@@ -140,9 +140,9 @@ pfindCurrencySymbolsByTokenName ::
     )
 pfindCurrencySymbolsByTokenName = phoistAcyclic $
   plam $ \value tn ->
-      let mapVal = pto (pto value)
-          hasTn = pfilter # plam (\csPair -> pany # plam (\tk -> tn #== (pfromData (pfstBuiltin # tk))) # (pto $ pfromData (psndBuiltin # csPair))) # mapVal
-       in pmap # pfstBuiltin # hasTn
+    let mapVal = pto (pto value)
+        hasTn = pfilter # plam (\csPair -> pany # plam (\tk -> tn #== (pfromData (pfstBuiltin # tk))) # (pto $ pfromData (psndBuiltin # csPair))) # mapVal
+     in pmap # pfstBuiltin # hasTn
 
 -- | Checks if a Currency Symbol is held within a Value
 phasDataCS ::
@@ -224,7 +224,7 @@ paysToCredential = phoistAcyclic $
           PScriptCredential txOutValHash -> (pfield @"_0" # txOutValHash) #== valHash
           PPubKeyCredential _ -> (pcon PFalse)
 
-pelemAt' :: PIsListLike l a => Term s (PInteger :--> l a :--> a)
+pelemAt' :: (PIsListLike l a) => Term s (PInteger :--> l a :--> a)
 pelemAt' = phoistAcyclic $
   pfix #$ plam $ \self n xs ->
     pif
@@ -232,7 +232,7 @@ pelemAt' = phoistAcyclic $
       (phead # xs)
       (self # (n - 1) #$ ptail # xs)
 
-pelemAtFlipped' :: PIsListLike l a => Term s (l a :--> PInteger :--> a)
+pelemAtFlipped' :: (PIsListLike l a) => Term s (l a :--> PInteger :--> a)
 pelemAtFlipped' = phoistAcyclic $
   pfix #$ plam $ \self xs n ->
     pif
@@ -242,9 +242,9 @@ pelemAtFlipped' = phoistAcyclic $
 
 pmapMaybe ::
   forall (list :: PType -> PType) (a :: PType) (b :: PType).
-  PListLike list =>
-  PElemConstraint list a =>
-  PElemConstraint list b =>
+  (PListLike list) =>
+  (PElemConstraint list a) =>
+  (PElemConstraint list b) =>
   ClosedTerm ((a :--> PMaybe b) :--> list a :--> list b)
 pmapMaybe =
   phoistAcyclic $
@@ -299,7 +299,7 @@ ptryOwnInput = phoistAcyclic $
   plam $ \inputs ownRef ->
     precList (\self x xs -> pletFields @'["outRef", "resolved"] x $ \txInFields -> pif (ownRef #== txInFields.outRef) txInFields.resolved (self # xs)) (const perror) # inputs
 
-pmustFind :: PIsListLike l a => Term s ((a :--> PBool) :--> l a :--> a)
+pmustFind :: (PIsListLike l a) => Term s ((a :--> PBool) :--> l a :--> a)
 pmustFind =
   phoistAcyclic $ plam $ \f -> pfix #$ plam $ \self xs -> pelimList (\y ys -> pif (f # y) y (self # ys)) perror xs
 
@@ -400,8 +400,8 @@ a #- b = pnormalize #$ Value.punionWith # plam (-) # a # b
 
 pfindWithRest ::
   forall (list :: PType -> PType) (a :: PType).
-  PListLike list =>
-  PElemConstraint list a =>
+  (PListLike list) =>
+  (PElemConstraint list a) =>
   ClosedTerm
     ( (a :--> PBool)
         :--> list a
@@ -488,8 +488,7 @@ ptryLookupValue = phoistAcyclic $
         (const perror)
         # pto val'
 
-{- | Removes a currency symbol from a value 
--}
+-- | Removes a currency symbol from a value
 pfilterCSFromValue ::
   forall
     (anyOrder :: KeyGuarantees)
@@ -501,10 +500,10 @@ pfilterCSFromValue ::
     )
 pfilterCSFromValue = phoistAcyclic $
   plam $ \value policyId ->
-      let mapVal = pto (pto value)
-          go = pfix #$ plam $ \self ys ->
-                pelimList (\x xs -> pif (pfstBuiltin # x #== policyId) xs (pcons # x # (self # xs))) pnil ys
-       in pcon (PValue $ pcon $ PMap $ go # mapVal)
+    let mapVal = pto (pto value)
+        go = pfix #$ plam $ \self ys ->
+          pelimList (\x xs -> pif (pfstBuiltin # x #== policyId) xs (pcons # x # (self # xs))) pnil ys
+     in pcon (PValue $ pcon $ PMap $ go # mapVal)
 
 psingletonOfCS ::
   forall
@@ -679,12 +678,12 @@ ponlyAsset = phoistAcyclic $
             pcon (PTriple (pfromData (pfstBuiltin # valuePair)) (pfromData (pfstBuiltin # tkPair)) (pfromData (psndBuiltin # tkPair)))
 
 pand'List :: [Term s PBool] -> Term s PBool
-pand'List ts' = 
-  case ts' of 
-    [] -> pconstant True 
+pand'List ts' =
+  case ts' of
+    [] -> pconstant True
     ts -> foldl1 (\res x -> pand' # res # x) ts
 
-pcond ::  [(Term s PBool, Term s a)] -> Term s a -> Term s a
+pcond :: [(Term s PBool, Term s a)] -> Term s a -> Term s a
 pcond [] def = def
 pcond ((cond, x) : conds) def = pif cond x $ pcond conds def
 

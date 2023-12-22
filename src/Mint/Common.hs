@@ -1,11 +1,10 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
-
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Mint.Common (
   PPriceStakingCommon (..),
@@ -14,9 +13,14 @@ module Mint.Common (
   pDeinit,
   pRemove,
   pInsert,
-  pClaim
+  pClaim,
 ) where
 
+import Mint.Helpers (
+  correctNodeTokenMinted,
+  correctNodeTokensMinted,
+  coversKey,
+ )
 import Plutarch.Api.V1.Value (plovelaceValueOf, pnormalize, pvalueOf)
 import Plutarch.Api.V2 (
   AmountGuarantees (..),
@@ -35,7 +39,6 @@ import Plutarch.Api.V2 (
  )
 import Plutarch.Extra.Interval (pafter, pbefore)
 import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pguardC)
 import Plutarch.Internal (Config (..))
 import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
@@ -43,10 +46,18 @@ import Plutarch.Positive (PPositive)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 import PlutusLedgerApi.V2 (CurrencySymbol)
-import Mint.Helpers (
-  correctNodeTokenMinted,
-  correctNodeTokensMinted,
-  coversKey,
+import Types.Constants (minAda, minCommitment, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.StakingSet (
+  PNodeKey (..),
+  PStakingConfig,
+  PStakingSetNode,
+  asPredecessorOf,
+  asSuccessorOf,
+  isEmptySet,
+  isFirstNode,
+  isLastNode,
+  isNothing,
+  validNode,
  )
 import Utils (
   pand'List,
@@ -55,11 +66,11 @@ import Utils (
   paysToCredential,
   pcheck,
   pcountOfUniqueTokens,
-  pfindWithRest,
   pfindCurrencySymbolsByTokenPrefix,
-  pheadSingleton,
+  pfindWithRest,
   phasCS,
   phasDataCS,
+  pheadSingleton,
   pmapMaybe,
   pmustFind,
   psingletonOfCS,
@@ -67,19 +78,7 @@ import Utils (
   (#>),
   (#>=),
  )
-import Types.Constants (minAda, minCommitment, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
-import Types.StakingSet (
-  PStakingConfig,
-  PStakingSetNode,
-  PNodeKey (..),
-  asPredecessorOf,
-  asSuccessorOf,
-  isEmptySet,
-  isNothing,
-  isFirstNode,
-  isLastNode,
-  validNode,
- )
+import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pguardC)
 
 pdivideCeil :: Term s (PInteger :--> PInteger :--> PInteger)
 pdivideCeil = phoistAcyclic $ plam $ \a b -> (pdiv # a # b) + pif ((pmod # a # b) #> 0) 1 0
@@ -128,7 +127,7 @@ parseNodeOutputUtxo cfg = phoistAcyclic $
           PKey ((pfield @"_0" #) -> key) -> pcon $ PJust key
 
     -- Prevents TokenDust attack
-    passert "All FSN tokens from node policy" $ 
+    passert "All FSN tokens from node policy" $
       pheadSingleton # (pfindCurrencySymbolsByTokenPrefix # value # pconstant "FSN") #== nodeCS
     passert "Too many assets" $ pcountOfUniqueTokens # value #== 2
     passert "Incorrect number of nodeTokens" $ amount #== 1
@@ -276,7 +275,7 @@ pInsert cfg common = plam $ \pkToInsert node -> P.do
       # common.nodeOutputs
       #&& hasDatumInOutputs
       # nodeOutDatum
-      
+
   -- Mint checks:
   passert "Incorrect mint for Insert" $
     correctNodeTokenMinted # common.ownCS # (pnodeKeyTN # keyToInsert) # 1 # common.mint
@@ -313,8 +312,8 @@ pRemove cfg common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
 
   -- Output Checks:
 
-  PPair stayValue _stayDatum <- pmatch stayNode 
-  PPair removedValue _removedDatum <- pmatch removedNode 
+  PPair stayValue _stayDatum <- pmatch stayNode
+  PPair removedValue _removedDatum <- pmatch removedNode
   {- This check has weak constraints due to the fact that the only way
     To provide more node outputs would be to mint more node tokens.
     Therefore we can safely assure that this is the only node Output.
@@ -334,26 +333,25 @@ pRemove cfg common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
   let ownInputLovelace = plovelaceValueOf # removedValue
       ownInputFee = pdivideCeil # ownInputLovelace # 4
       discDeadline = configF.stakingDeadline
-  
+
   let finalCheck =
-          -- user committing before deadline 
-          ( pif
-              (pafter # (discDeadline - 86_400_000) # vrange) -- user committing before 24 hours before deadline
-              (pconstant True)
-              ( pany
-                  # plam
-                    ( \out ->
-                        pfield @"address"
-                          # out
-                          #== configF.penaltyAddress
-                          #&& ownInputFee
-                          #<= plovelaceValueOf
-                          # (pfield @"value" # out)
-                    )
-                  # outs -- must pay 25% fee
-              )
-          )
-          
+        -- user committing before deadline
+        ( pif
+            (pafter # (discDeadline - 86_400_000) # vrange) -- user committing before 24 hours before deadline
+            (pconstant True)
+            ( pany
+                # plam
+                  ( \out ->
+                      pfield @"address"
+                        # out
+                        #== configF.penaltyAddress
+                        #&& ownInputFee
+                        #<= plovelaceValueOf
+                        # (pfield @"value" # out)
+                  )
+                # outs -- must pay 25% fee
+            )
+        )
 
   passert "Removal broke Phase Rules." finalCheck
 
@@ -368,7 +366,7 @@ pClaim ::
   Term s (PAsData PPubKeyHash :--> PUnit)
 pClaim cfg common outs sigs = plam $ \pkToRemove -> P.do
   keyToRemove <- plet . pto . pfromData $ pkToRemove
-  
+
   -- Input Checks
   PPair removedValue _removedDatum <- pmatch (pheadSingleton # common.nodeInputs)
 
@@ -381,8 +379,8 @@ pClaim cfg common outs sigs = plam $ \pkToRemove -> P.do
     correctNodeTokenMinted # common.ownCS # nodeToRemoveTN # (-1) # common.mint
 
   passert "signed by user." (pelem # pkToRemove # sigs)
-          
-  -- verify that this node has been processed by the rewards fold by checking that count of tokens is 3. 
+
+  -- verify that this node has been processed by the rewards fold by checking that count of tokens is 3.
   passert "Claim broke phase rules." (pcountOfUniqueTokens # removedValue #>= 3)
 
   pconstant ()

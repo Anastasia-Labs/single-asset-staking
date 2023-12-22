@@ -35,7 +35,7 @@ import Plutarch.Api.V2 (
   PPOSIXTime,
   PPubKeyHash (PPubKeyHash),
   PScriptHash (..),
-  PStakingCredential(..),
+  PStakingCredential (..),
   PTxOutRef,
  )
 import Plutarch.DataRepr (

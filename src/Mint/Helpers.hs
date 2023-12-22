@@ -26,9 +26,9 @@ import Plutarch.Extra.Traversable (pfoldMap)
 import Plutarch.Monadic qualified as P
 
 import Plutarch.Prelude
-import Utils (phasCS)
 import Types.Constants (pnodeKeyTN)
-import Types.StakingSet (PStakingSetNode, PNodeKey (PEmpty, PKey))
+import Types.StakingSet (PNodeKey (PEmpty, PKey), PStakingSetNode)
+import Utils (phasCS)
 
 -- | Checks that key is 'covered' by the Node
 coversKey :: ClosedTerm (PAsData PStakingSetNode :--> PByteString :--> PBool)

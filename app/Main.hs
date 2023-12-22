@@ -17,6 +17,8 @@ import Data.Text (
   pack,
  )
 import Data.Text.Encoding qualified as Text
+import Mint.Standard (mkStakingNodeMPW)
+import MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW)
 import Plutarch (
   Config (Config),
   TracingMode (DoTracing, NoTracing),
@@ -24,9 +26,6 @@ import Plutarch (
  )
 import Plutarch.Evaluate (
   evalScript,
- )
-import "liqwid-plutarch-extra" Plutarch.Extra.Script (
-  applyArguments,
  )
 import Plutarch.Prelude
 import Plutarch.Script (Script, serialiseScript)
@@ -37,10 +36,11 @@ import PlutusLedgerApi.V2 (
 import Ply.Plutarch (
   writeTypedScript,
  )
-import Mint.Standard (mkStakingNodeMPW)
-import MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW)
-import Validator (pStakingSetValidator, pDiscoverGlobalLogicW)
 import System.IO
+import Validator (pDiscoverGlobalLogicW, pStakingSetValidator)
+import "liqwid-plutarch-extra" Plutarch.Extra.Script (
+  applyArguments,
+ )
 
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript
@@ -76,4 +76,3 @@ main = do
   writePlutusScript "Commit Fold Mint" "./compiled/foldMint.json" pmintFoldPolicyW
   writePlutusScript "Reward Fold Validator" "./compiled/rewardFoldValidator.json" prewardFoldValidatorW
   writePlutusScript "Reward Fold Mint" "./compiled/rewardFoldMint.json" pmintRewardFoldPolicyW
-
