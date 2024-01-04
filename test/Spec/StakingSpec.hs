@@ -56,9 +56,6 @@ import PlutusLedgerApi.V2 (
 import PlutusTx qualified
 import Test.Tasty (TestTree)
 
-import Mint.Helpers (
-  hasUtxoWithRef,
- )
 import Mint.Common (
   PStakingCommon (mint, ownCS),
   makeCommon,
@@ -68,11 +65,14 @@ import Mint.Common (
   pInsert,
   pRemove,
  )
+import Mint.Helpers (
+  hasUtxoWithRef,
+ )
 import Plutarch.Monadic qualified as P
 import Plutarch.Unsafe (punsafeCoerce)
 
 import Plutarch.Prelude
-import Types.StakingSet (StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..), PStakingConfig (..), PStakingNodeAction (..))
+import Types.StakingSet (PStakingConfig (..), PStakingNodeAction (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 import Utils (pand'List, passert, pcond)
 
 --------------------------------

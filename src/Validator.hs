@@ -16,6 +16,7 @@ module Validator (
 
 import Data.ByteString (ByteString)
 
+import Conversions
 import Plutarch (Config)
 import Plutarch.Api.V1 (
   PCredential (..),
@@ -40,7 +41,7 @@ import Utils (passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPref
 
 pDiscoverGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PStakeValidator)
 pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardCS' _redeemer ctx -> P.do
-  -- let rewardsIdx = punsafeCoerce @_ @_ @(PAsData PInteger) redeemer
+  -- let rewardsIdx = pconvert @(PAsData PInteger) redeemer
   ctxF <- pletFields @'["txInfo"] ctx
   infoF <- pletFields @'["inputs"] ctxF.txInfo
   rewardCS <- plet $ pfromData rewardCS'
@@ -54,8 +55,8 @@ pStakingSetValidator ::
   ByteString ->
   ClosedTerm (PStakingLaunchConfig :--> PValidator)
 pStakingSetValidator cfg prefix = plam $ \discConfig dat redmn ctx' ->
-  let redeemer = punsafeCoerce @_ @_ @PNodeValidatorAction redmn
-      oldDatum = punsafeCoerce @_ @_ @PStakingSetNode dat
+  let redeemer = pconvert @PNodeValidatorAction redmn
+      oldDatum = pconvert @PStakingSetNode dat
    in pmatch redeemer $ \case
         PRewardFoldAct _ ->
           let stakeCerts = pfield @"wdrl" # (pfield @"txInfo" # ctx')

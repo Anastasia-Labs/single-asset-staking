@@ -14,10 +14,8 @@ import Plutarch.Api.V2 (
  )
 import Plutarch.Extra.Interval (pafter, pbefore)
 
---  pRemoveAndDeinit,
-
 import Mint.Common (
-  PPriceStakingCommon (mint, ownCS),
+  PStakingCommon (mint, ownCS),
   makeCommon,
   pClaim,
   pDeinit,
@@ -41,28 +39,27 @@ import Utils (pand'List, passert, pcond)
 --------------------------------
 
 mkStakingNodeMP ::
-  Config ->
   ClosedTerm
     ( PStakingConfig
         :--> PStakingNodeAction
         :--> PScriptContext
         :--> PUnit
     )
-mkStakingNodeMP cfg = plam $ \discConfig redm ctx -> P.do
+mkStakingNodeMP = plam $ \discConfig redm ctx -> P.do
   configF <- pletFields @'["initUTxO"] discConfig
 
   (common, inputs, outs, sigs, vrange) <-
     runTermCont $
-      makeCommon cfg ctx
+      makeCommon ctx
 
   pmatch redm $ \case
     PInit _ -> P.do
       passert "Init must consume TxOutRef" $
         hasUtxoWithRef # configF.initUTxO # inputs
-      pInit cfg common
+      pInit common
     PDeinit _ ->
       -- TODO deinit must check that reward fold has been completed
-      pDeinit cfg common
+      pDeinit common
     PInsert action -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action
       let insertChecks =
@@ -70,23 +67,22 @@ mkStakingNodeMP cfg = plam $ \discConfig redm ctx -> P.do
               [ pafter # (pfield @"stakingDeadline" # discConfig) # vrange
               , pelem # act.keyToInsert # sigs
               ]
-      pif insertChecks (pInsert cfg common # act.keyToInsert # act.coveringNode) perror
+      pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) perror
     PRemove action -> P.do
       configF <- pletFields @'["stakingDeadline"] discConfig
       act <- pletFields @'["keyToRemove", "coveringNode"] action
       discDeadline <- plet configF.stakingDeadline
       pcond
-        [ ((pbefore # discDeadline # vrange), (pClaim cfg common outs sigs # act.keyToRemove))
-        , ((pafter # discDeadline # vrange), (pRemove cfg common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode))
+        [ ((pbefore # discDeadline # vrange), (pClaim common outs sigs # act.keyToRemove))
+        , ((pafter # discDeadline # vrange), (pRemove common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode))
         ]
         perror
 
 mkStakingNodeMPW ::
-  Config ->
   ClosedTerm
     ( PStakingConfig
         :--> PMintingPolicy
     )
-mkStakingNodeMPW cfg = phoistAcyclic $ plam $ \discConfig redm ctx ->
+mkStakingNodeMPW = phoistAcyclic $ plam $ \discConfig redm ctx ->
   let red = punsafeCoerce @_ @_ @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP cfg # discConfig # red # ctx
+   in popaque $ mkStakingNodeMP # discConfig # red # ctx

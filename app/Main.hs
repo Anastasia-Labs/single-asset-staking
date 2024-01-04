@@ -71,7 +71,7 @@ main = do
   putStrLn "Exporting Single Asset Staking Scripts"
   writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/stakingStakeValidator.json" pDiscoverGlobalLogicW
   writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator def "FSN"
-  writePlutusScript "Single Asset Staking Mint" "./compiled/stakingMinting.json" $ mkStakingNodeMPW def
+  writePlutusScript "Single Asset Staking Mint" "./compiled/stakingMinting.json" $ mkStakingNodeMPW
   writePlutusScript "Commit Fold Validator" "./compiled/foldValidator.json" pfoldValidatorW
   writePlutusScript "Commit Fold Mint" "./compiled/foldMint.json" pmintFoldPolicyW
   writePlutusScript "Reward Fold Validator" "./compiled/rewardFoldValidator.json" prewardFoldValidatorW
