@@ -1,16 +1,26 @@
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Plutarch.LinkedList (
-  PPriceDiscoveryCommon (..),
+module Mint.Common (
+  PStakingCommon (..),
   makeCommon,
   pInit,
   pDeinit,
   pRemove,
   pInsert,
   pClaim,
-)
-where
+) where
 
+import Mint.Helpers (
+  correctNodeTokenMinted,
+  correctNodeTokensMinted,
+  coversKey,
+ )
 import Plutarch.Api.V1.Value (plovelaceValueOf, pnormalize, pvalueOf)
 import Plutarch.Api.V2 (
   AmountGuarantees (..),
@@ -21,41 +31,50 @@ import Plutarch.Api.V2 (
   PPOSIXTime,
   PPubKeyHash,
   PScriptContext,
+  PScriptHash (..),
   PScriptPurpose (PMinting),
   PTxInInfo,
   PTxOut,
   PValue,
  )
-import Plutarch.Constants (minCommitment, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
-import Plutarch.Extra.Interval (pafter)
+import Plutarch.Extra.Interval (pafter, pbefore)
 import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
-import Plutarch.Helpers (
-  correctNodeTokenMinted,
-  coversKey,
- )
+import Plutarch.Internal (Config (..))
 import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
+import Plutarch.Positive (PPositive)
 import Plutarch.Prelude
-import Plutarch.Types (
-  PDiscoveryConfig,
-  PDiscoverySetNode,
+import Plutarch.Unsafe (punsafeCoerce)
+import PlutusLedgerApi.V2 (CurrencySymbol)
+import Types.Constants (minAda, minCommitment, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.StakingSet (
   PNodeKey (..),
+  PStakingConfig,
+  PStakingSetNode,
   asPredecessorOf,
   asSuccessorOf,
   isEmptySet,
+  isFirstNode,
+  isLastNode,
+  isNothing,
   validNode,
  )
-import Plutarch.Unsafe (punsafeCoerce)
-import Plutarch.Utils (
+import Utils (
   pand'List,
   passert,
   paysToAddress,
+  paysToCredential,
+  pcheck,
   pcountOfUniqueTokens,
   pfindCurrencySymbolsByTokenPrefix,
   pfindWithRest,
+  phasCS,
   phasDataCS,
   pheadSingleton,
+  pmapMaybe,
+  pmustFind,
   psingletonOfCS,
+  pvalueOfOne,
   (#>),
   (#>=),
  )
@@ -64,24 +83,24 @@ import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pguardC)
 pdivideCeil :: Term s (PInteger :--> PInteger :--> PInteger)
 pdivideCeil = phoistAcyclic $ plam $ \a b -> (pdiv # a # b) + pif ((pmod # a # b) #> 0) 1 0
 
--- nodeInputUtxoDatum ::
---   ClosedTerm
---     ( PAsData PCurrencySymbol
---         :--> PTxOut
---         :--> PMaybe (PAsData PDiscoverySetNode)
---     )
--- nodeInputUtxoDatum = phoistAcyclic $
---   plam $ \nodeCS out -> P.do
---     txOut <- pletFields @'["datum", "value"] out
---     let value = pfromData txOut.value
---     pcheck (phasDataCS # nodeCS # value) $
---       punsafeCoerce $
---         ptryFromInlineDatum # txOut.datum
+nodeInputUtxoDatum ::
+  ClosedTerm
+    ( PAsData PCurrencySymbol
+        :--> PTxOut
+        :--> PMaybe (PAsData PStakingSetNode)
+    )
+nodeInputUtxoDatum = phoistAcyclic $
+  plam $ \nodeCS out -> P.do
+    txOut <- pletFields @'["datum", "value"] out
+    let value = pfromData txOut.value
+    pcheck (phasDataCS # nodeCS # value) $
+      punsafeCoerce $
+        ptryFromInlineDatum # txOut.datum
 
 nodeInputUtxoDatumUnsafe ::
   ClosedTerm
     ( PTxOut
-        :--> PPair (PValue 'Sorted 'Positive) (PAsData PDiscoverySetNode)
+        :--> PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)
     )
 nodeInputUtxoDatumUnsafe = phoistAcyclic $
   plam $ \out -> pletFields @'["value", "datum"] out $ \outF ->
@@ -92,7 +111,7 @@ parseNodeOutputUtxo ::
   ClosedTerm
     ( PAsData PCurrencySymbol
         :--> PTxOut
-        :--> PPair (PValue 'Sorted 'Positive) (PAsData PDiscoverySetNode)
+        :--> PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)
     )
 parseNodeOutputUtxo = phoistAcyclic $
   plam $ \nodeCS out -> P.do
@@ -122,7 +141,7 @@ makeCommon ::
   Term s PScriptContext ->
   TermCont @r
     s
-    ( PPriceDiscoveryCommon s
+    ( PStakingCommon s
     , Term s (PBuiltinList PTxInInfo)
     , Term s (PBuiltinList PTxOut)
     , Term s (PBuiltinList (PAsData PPubKeyHash))
@@ -147,7 +166,7 @@ makeCommon ctx' = do
   -- refInsAsOuts <- tcont . plet $ asOuts # pfromData info.referenceInputs
   hasNodeTk <- tcont . plet $ phasDataCS # ownCS
   insAsOuts <- tcont . plet $ asOuts # pfromData info.inputs
-  onlyAtNodeVal <- tcont . plet $ pfilter # plam (\txo -> hasNodeTk # (pfield @"value" # txo))
+  onlyAtNodeVal <- tcont . plet $ pfilter # plam (\txo -> (hasNodeTk # (pfield @"value" # txo)))
   fromNodeValidator <- tcont . plet $ onlyAtNodeVal # insAsOuts
   toNodeValidator <- tcont . plet $ onlyAtNodeVal # info.outputs
   ------------------------------
@@ -156,8 +175,8 @@ makeCommon ctx' = do
         pelimList
           ( \x xs -> plet (paysToAddress # (pfield @"address" # x)) $ \isSameAddr ->
               pand'List
-                [ pall # isSameAddr # xs
-                , pall # isSameAddr # toNodeValidator
+                [ (pall # isSameAddr # xs)
+                , (pall # isSameAddr # toNodeValidator)
                 ]
           )
           (pconstant True)
@@ -176,7 +195,7 @@ makeCommon ctx' = do
 
   let common =
         MkCommon
-          { ownCS = pfromData ownCS
+          { ownCS = (pfromData ownCS)
           , mint
           , nodeInputs
           , nodeOutputs
@@ -190,7 +209,7 @@ makeCommon ctx' = do
     , info.validRange
     )
 
-pInit :: forall (s :: S). PPriceDiscoveryCommon s -> Term s PUnit
+pInit :: forall (s :: S). PStakingCommon s -> Term s PUnit
 pInit common = P.do
   -- Input Checks
   passert "Init must not spend Nodes" $ pnull # common.nodeInputs
@@ -207,7 +226,7 @@ pInit common = P.do
   pconstant ()
 
 -- TODO add deadline check
-pDeinit :: forall s. PPriceDiscoveryCommon s -> Term s PUnit
+pDeinit :: forall s. PStakingCommon s -> Term s PUnit
 pDeinit common = P.do
   -- Input Checks
   -- The following commented code should be used instead for protocols where node removal
@@ -226,8 +245,8 @@ pDeinit common = P.do
 
 pInsert ::
   forall (s :: S).
-  PPriceDiscoveryCommon s ->
-  Term s (PAsData PPubKeyHash :--> PAsData PDiscoverySetNode :--> PUnit)
+  PStakingCommon s ->
+  Term s (PAsData PPubKeyHash :--> PAsData PStakingSetNode :--> PUnit)
 pInsert common = plam $ \pkToInsert node -> P.do
   keyToInsert <- plet . pto . pfromData $ pkToInsert
   passert "Node should cover inserting key" $
@@ -262,12 +281,12 @@ pInsert common = plam $ \pkToInsert node -> P.do
 
 pRemove ::
   forall (s :: S).
-  PPriceDiscoveryCommon s ->
+  PStakingCommon s ->
   Term s (PInterval PPOSIXTime) ->
-  Term s PDiscoveryConfig ->
+  Term s PStakingConfig ->
   Term s (PBuiltinList PTxOut) ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
-  Term s (PAsData PPubKeyHash :--> PAsData PDiscoverySetNode :--> PUnit)
+  Term s (PAsData PPubKeyHash :--> PAsData PStakingSetNode :--> PUnit)
 pRemove common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
   keyToRemove <- plet . pto . pfromData $ pkToRemove
   passert "Node does not cover key to remove" $
@@ -305,29 +324,30 @@ pRemove common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
 
   passert "signed by user." (pelem # pkToRemove # sigs)
 
-  configF <- pletFields @'["discoveryDeadline", "penaltyAddress"] discConfig
+  configF <- pletFields @'["stakingDeadline", "penaltyAddress"] discConfig
 
   let ownInputLovelace = plovelaceValueOf # removedValue
       ownInputFee = pdivideCeil # ownInputLovelace # 4
-      discDeadline = configF.discoveryDeadline
+      discDeadline = configF.stakingDeadline
 
   let finalCheck =
         -- user committing before deadline
-        pif
-          (pafter # (discDeadline - 86_400_000) # vrange) -- user committing before 24 hours before deadline
-          (pconstant True)
-          ( pany
-              # plam
-                ( \out ->
-                    pfield @"address"
-                      # out
-                      #== configF.penaltyAddress
-                      #&& ownInputFee
-                      #<= plovelaceValueOf
-                      # (pfield @"value" # out)
-                )
-              # outs -- must pay 25% fee
-          )
+        ( pif
+            (pafter # (discDeadline - 24 * 60 * 60 * 1000) # vrange) -- user committing before 24 hours before deadline
+            (pconstant True)
+            ( pany
+                # plam
+                  ( \out ->
+                      pfield @"address"
+                        # out
+                        #== configF.penaltyAddress
+                        #&& ownInputFee
+                        #<= plovelaceValueOf
+                        # (pfield @"value" # out)
+                  )
+                # outs -- must pay 25% fee
+            )
+        )
 
   passert "Removal broke Phase Rules." finalCheck
 
@@ -335,11 +355,11 @@ pRemove common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
 
 pClaim ::
   forall (s :: S).
-  PPriceDiscoveryCommon s ->
+  PStakingCommon s ->
   Term s (PBuiltinList PTxOut) ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
   Term s (PAsData PPubKeyHash :--> PUnit)
-pClaim common _ sigs = plam $ \pkToRemove -> P.do
+pClaim common outs sigs = plam $ \pkToRemove -> P.do
   keyToRemove <- plet . pto . pfromData $ pkToRemove
 
   -- Input Checks
@@ -361,14 +381,14 @@ pClaim common _ sigs = plam $ \pkToRemove -> P.do
   pconstant ()
 
 -- Common information shared between all redeemers.
-data PPriceDiscoveryCommon (s :: S) = MkCommon
+data PStakingCommon (s :: S) = MkCommon
   { ownCS :: Term s PCurrencySymbol
   -- ^ state token (own) CS
   , mint :: Term s (PValue 'Sorted 'NonZero)
   -- ^ value minted in current Tx
-  , nodeInputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PDiscoverySetNode)))
+  , nodeInputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)))
   -- ^ current Tx outputs to AuctionValidator
-  , nodeOutputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PDiscoverySetNode)))
+  , nodeOutputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)))
   -- ^ current Tx inputs
   }
   deriving stock (Generic)

@@ -1,19 +1,43 @@
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
-module Plutarch.Constants where
+module Types.Constants where
 
 import Plutarch
 import Plutarch.Api.V1 (PTokenName (..))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import Plutarch.Utils (passert, pisPrefixOf)
 import PlutusLedgerApi.V1 (TokenName)
+import Utils (passert, pisPrefixOf)
+
+projectTokenHolderTN :: Term s PTokenName
+projectTokenHolderTN =
+  let tn :: TokenName
+      tn = "PTHolder"
+   in pconstant tn
+
+commitFoldTN :: Term s PTokenName
+commitFoldTN =
+  let tn :: TokenName
+      tn = "CFold"
+   in pconstant tn
+
+rewardFoldTN :: Term s PTokenName
+rewardFoldTN =
+  let tn :: TokenName
+      tn = "RFold"
+   in pconstant tn
 
 poriginNodeTN :: Term s PTokenName
 poriginNodeTN =
   let tn :: TokenName
       tn = "FSN"
+   in pconstant tn
+
+pcorrNodeTN :: Term s PTokenName
+pcorrNodeTN =
+  let tn :: TokenName
+      tn = "FCN"
    in pconstant tn
 
 psetNodePrefix :: ClosedTerm PByteString
@@ -32,6 +56,12 @@ pparseNodeKey = phoistAcyclic $
         key = psliceBS # prefixLength # (tnLength - prefixLength) # tn
     passert "incorrect node prefix" $ pisPrefixOf # psetNodePrefix # tn
     pif (prefixLength #< tnLength) (pcon $ PJust key) (pcon PNothing)
+
+foldingFee :: Term s PInteger
+foldingFee = pconstant 1_000_000
+
+minAda :: Term s PInteger
+minAda = pconstant 2_000_000
 
 nodeAda :: Term s PInteger
 nodeAda = pconstant 3_000_000
