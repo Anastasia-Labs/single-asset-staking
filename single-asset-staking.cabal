@@ -123,6 +123,26 @@ common dependencies
     , serialise
     , text
 
+common test-dependencies
+  build-depends:
+    , base
+    , bytestring
+    , hedgehog
+    , hedgehog-quickcheck
+    , liqwid-plutarch-extra
+    , plutarch
+    , plutarch-context-builder
+    , plutarch-extra
+    , plutarch-quickcheck
+    , plutarch-unit
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , tasty
+    , tasty-hedgehog
+    , tasty-hunit
+    , text
+
 library
   import:          lang, dependencies
   exposed-modules:
@@ -144,6 +164,14 @@ library
 
   else
     hs-source-dirs: src-checked
+
+test-suite single-asset-staking-test
+  import:         lang, dependencies, test-dependencies
+  type:           exitcode-stdio-1.0
+  build-depends:  single-asset-staking
+  main-is:        Spec.hs
+  hs-source-dirs: test
+  other-modules:  Spec.StakingSpec
 
 executable single-asset-staking
   import:         lang, dependencies

@@ -7,12 +7,16 @@
 
 module Types.StakingSet (
   PStakingNodeAction (..),
+  StakingNodeAction (..),
   PNodeValidatorAction (..),
   PStakingConfig (..),
+  StakingConfig (..),
+  StakingNodeKey (..),
   PStakingLaunchConfig (..),
   PSepNodeAction (..),
   PSeparatorConfig (..),
   PStakingSetNode (..),
+  StakingSetNode (..),
   PNodeKey (..),
   PNodeKeyState (..),
   isEmptySet,
@@ -45,7 +49,7 @@ import Plutarch.DataRepr (
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, POSIXTime, PubKeyHash, TxOutRef)
 import PlutusTx qualified
 import Types.Classes
 
@@ -94,6 +98,14 @@ data PStakingLaunchConfig (s :: S)
 
 instance DerivePlutusType PStakingLaunchConfig where type DPTStrat _ = PlutusTypeData
 
+data StakingConfig = StakingConfig
+  { initUTxO :: TxOutRef
+  , stakingDeadline :: POSIXTime
+  , penaltyAddress :: Address
+  }
+
+PlutusTx.makeIsDataIndexed ''StakingConfig ([('StakingConfig, 0)])
+
 data PStakingConfig (s :: S)
   = PStakingConfig
       ( Term
@@ -109,6 +121,8 @@ data PStakingConfig (s :: S)
   deriving anyclass (PlutusType, PIsData, PDataFields, PEq)
 
 instance DerivePlutusType PStakingConfig where type DPTStrat _ = PlutusTypeData
+instance PUnsafeLiftDecl PStakingConfig where type PLifted PStakingConfig = StakingConfig
+deriving via (DerivePConstantViaData StakingConfig PStakingConfig) instance PConstantDecl StakingConfig
 
 data StakingNodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
