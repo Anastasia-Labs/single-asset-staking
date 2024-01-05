@@ -13,13 +13,20 @@ version:            0.1.0.0
 
 -- The license under which the package is released.
 -- license:
-author:             Hade
-maintainer:         hadelive
+author:             SolidSnake
+maintainer:         solid@snake
 
 -- A copyright notice.
 -- copyright:
 -- category:
 extra-source-files: CHANGELOG.md
+
+flag optimized
+  description:
+    If optimized is True, some checks are disabled. Disable checks to create optimized scripts.
+
+  default:     False
+  manual:      True
 
 common lang
   ghc-options:
@@ -93,6 +100,29 @@ common lang
 
   default-language:   GHC2021
 
+common dependencies
+  build-depends:
+    , aeson
+    , aeson-pretty
+    , base
+    , base16-bytestring
+    , bytestring
+    , cardano-binary
+    , cborg
+    , data-default
+    , directory
+    , liqwid-plutarch-extra
+    , liqwid-script-export
+    , plutarch
+    , plutarch-extra
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , ply-core
+    , ply-plutarch
+    , serialise
+    , text
+
 common test-dependencies
   build-depends:
     , base
@@ -114,33 +144,43 @@ common test-dependencies
     , text
 
 library
-  import:          lang
+  import:          lang, dependencies
   exposed-modules:
-    Plutarch.Classes
-    Plutarch.Constants
-    Plutarch.Helpers
-    Plutarch.LinkedList
-    Plutarch.Types
-    Plutarch.Utils
+    Mint.Common
+    Mint.Helpers
+    Mint.Standard
+    MultiFold
+    Types.Classes
+    Types.Constants
+    Types.StakingSet
+    Utils
+    Validator
 
-  build-depends:
-    , aeson
-    , aeson-pretty
-    , base
-    , base16-bytestring
-    , bytestring
-    , cardano-binary
-    , data-default
-    , liqwid-plutarch-extra
-    , plutarch
-    , plutarch-extra
-    , plutus-core
-    , plutus-ledger-api
-    , plutus-tx
-    , ply-core
-    , ply-plutarch
-    , prettyprinter
-    , serialise
-    , text
-
+  other-modules:   Conversions
   hs-source-dirs:  src
+
+  if flag(optimized)
+    hs-source-dirs: src-optimized
+
+  else
+    hs-source-dirs: src-checked
+
+test-suite single-asset-staking-test
+  import:         lang, dependencies, test-dependencies
+  type:           exitcode-stdio-1.0
+  build-depends:  single-asset-staking
+  main-is:        Spec.hs
+  hs-source-dirs: test
+  other-modules:  Spec.StakingSpec
+
+executable single-asset-staking
+  import:         lang, dependencies
+  main-is:        Main.hs
+
+  -- Modules included in this executable, other than Main.
+  -- other-modules:
+
+  -- LANGUAGE extensions used by modules in this package.
+  -- other-extensions:
+  build-depends:  single-asset-staking
+  hs-source-dirs: app

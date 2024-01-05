@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 
-module Plutarch.Classes where
+module Types.Classes where
 
 import Plutarch.Prelude
 
