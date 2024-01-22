@@ -154,6 +154,8 @@ library
     Types.Constants
     Types.StakingSet
     Utils
+    RewardTokenHolder
+    AlwaysFails
     Validator
 
   other-modules:   Conversions

@@ -38,6 +38,8 @@ import Ply.Plutarch (
  )
 import System.IO
 import Validator (pDiscoverGlobalLogicW, pStakingSetValidator)
+import AlwaysFails (pAlwaysFails, pAuthMint)
+import RewardTokenHolder (prewardTokenHolder, pmintRewardTokenHolder)
 import "liqwid-plutarch-extra" Plutarch.Extra.Script (
   applyArguments,
  )
@@ -71,8 +73,12 @@ main = do
   putStrLn "Exporting Single Asset Staking Scripts"
   writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/stakingStakeValidator.json" pDiscoverGlobalLogicW
   writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator def "FSN"
-  writePlutusScript "Single Asset Staking Mint" "./compiled/stakingMinting.json" $ mkStakingNodeMPW
+  writePlutusScript "Single Asset Staking - Minting Validator" "./compiled/stakingMint.json" $ mkStakingNodeMPW
   writePlutusScript "Commit Fold Validator" "./compiled/foldValidator.json" pfoldValidatorW
   writePlutusScript "Commit Fold Mint" "./compiled/foldMint.json" pmintFoldPolicyW
   writePlutusScript "Reward Fold Validator" "./compiled/rewardFoldValidator.json" prewardFoldValidatorW
   writePlutusScript "Reward Fold Mint" "./compiled/rewardFoldMint.json" pmintRewardFoldPolicyW
+  writePlutusScript "Token Holder Validator" "./compiled/tokenHolderValidator.json" prewardTokenHolder
+  writePlutusScript "Token Holder Policy" "./compiled/tokenHolderPolicy.json" pmintRewardTokenHolder
+  writePlutusScript "Always Fails" "./compiled/alwaysFails.json" pAlwaysFails
+  writePlutusScript "Auth Mint" "./compiled/authMint.json" pAuthMint

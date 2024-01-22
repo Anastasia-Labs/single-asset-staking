@@ -10,10 +10,10 @@ import Plutarch.Prelude
 import PlutusLedgerApi.V1 (TokenName)
 import Utils (passert, pisPrefixOf)
 
-projectTokenHolderTN :: Term s PTokenName
-projectTokenHolderTN =
+rewardTokenHolderTN :: Term s PTokenName
+rewardTokenHolderTN =
   let tn :: TokenName
-      tn = "PTHolder"
+      tn = "RTHolder"
    in pconstant tn
 
 commitFoldTN :: Term s PTokenName
