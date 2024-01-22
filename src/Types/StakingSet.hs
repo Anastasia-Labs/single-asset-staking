@@ -87,7 +87,7 @@ data PStakingLaunchConfig (s :: S)
       ( Term
           s
           ( PDataRecord
-              '[ "stakingDeadline" ':= PPOSIXTime
+              '[ "freezeStake" ':= PPOSIXTime
                , "penaltyAddress" ':= PAddress
                , "globalCred" ':= PStakingCredential
                ]
@@ -100,7 +100,7 @@ instance DerivePlutusType PStakingLaunchConfig where type DPTStrat _ = PlutusTyp
 
 data StakingConfig = StakingConfig
   { initUTxO :: TxOutRef
-  , stakingDeadline :: POSIXTime
+  , freezeStake :: POSIXTime
   , penaltyAddress :: Address
   }
 
@@ -112,7 +112,7 @@ data PStakingConfig (s :: S)
           s
           ( PDataRecord
               '[ "initUTxO" ':= PTxOutRef
-               , "stakingDeadline" ':= PPOSIXTime
+               , "freezeStake" ':= PPOSIXTime
                , "penaltyAddress" ':= PAddress
                ]
           )

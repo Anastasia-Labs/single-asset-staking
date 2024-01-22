@@ -88,7 +88,7 @@ pStakingSetValidator cfg prefix = plam $ \config dat redmn ctx' ->
               (popaque $ pconstant ())
             PModifyCommitment _ -> P.do
               PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-              configF <- pletFields @'["stakingDeadline"] config 
+              configF <- pletFields @'["freezeStake"] config 
               let ownOutput = ptryOwnOutput # info.outputs # ownValHash
               ownOutputF <- pletFields @'["value", "datum"] ownOutput
               POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum
@@ -97,5 +97,5 @@ pStakingSetValidator cfg prefix = plam $ \config dat redmn ctx' ->
               passert "Cannot modify non-ada value" (pnoAdaValue # ownInputF.value #== pnoAdaValue # ownOutputF.value) -- todo non-ada value except stake-token
               passert "Cannot reduce ada value" (plovelaceValueOf # ownInputF.value #< plovelaceValueOf # ownOutputF.value + 10_000_000) -- todo all value except stake-token to remain same
               passert "No tokens minted" (pfromData info.mint #== mempty)
-              passert "deadline passed" ((pafter # (pfromData configF.stakingDeadline - 86_400) # info.validRange))
+              passert "deadline passed" ((pafter # (pfromData configF.freezeStake - 86_400) # info.validRange))
               (popaque $ pconstant ())

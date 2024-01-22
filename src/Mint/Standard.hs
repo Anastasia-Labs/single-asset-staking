@@ -64,14 +64,14 @@ mkStakingNodeMP = plam $ \config redm ctx -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action
       let insertChecks =
             pand'List
-              [ pafter # (pfield @"stakingDeadline" # config) # vrange
+              [ pafter # (pfield @"freezeStake" # config) # vrange
               , pelem # act.keyToInsert # sigs
               ]
       pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) perror
     PRemove action -> P.do
-      configF <- pletFields @'["stakingDeadline"] config
+      configF <- pletFields @'["freezeStake"] config
       act <- pletFields @'["keyToRemove", "coveringNode"] action
-      discDeadline <- plet configF.stakingDeadline
+      discDeadline <- plet configF.freezeStake
       pcond
         [ ((pbefore # discDeadline # vrange), (pClaim common outs sigs # act.keyToRemove))
         , ((pafter # discDeadline # vrange), (pRemove common vrange config outs sigs # act.keyToRemove # act.coveringNode))

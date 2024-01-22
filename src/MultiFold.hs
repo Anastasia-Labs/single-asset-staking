@@ -87,7 +87,7 @@ data PFoldMintConfig (s :: S)
           ( PDataRecord
               '[ "nodeCS" ':= PCurrencySymbol
                , "foldAddr" ':= PAddress
-               , "stakingDeadline" ':= PPOSIXTime
+               , "freezeStake" ':= PPOSIXTime
                ]
           )
       )
@@ -186,7 +186,7 @@ pburnCommitFold = phoistAcyclic $
 pmintCommitFold :: Term s (PFoldMintConfig :--> PScriptContext :--> PUnit)
 pmintCommitFold = phoistAcyclic $
   plam $ \fconfig ctx -> unTermCont $ do
-    foldConfF <- pletFieldsC @'["nodeCS", "foldAddr", "stakingDeadline"] fconfig
+    foldConfF <- pletFieldsC @'["nodeCS", "foldAddr", "freezeStake"] fconfig
     contextFields <- pletFieldsC @'["txInfo", "purpose"] ctx
 
     PMinting policy <- pmatchC contextFields.purpose
@@ -219,7 +219,7 @@ pmintCommitFold = phoistAcyclic $
             , foldOutDatumF.currNode #== refInpDat
             , pfromData foldOutDatumF.committed #== pconstant 0
             , pvalueOf # refInputF.value # foldConfF.nodeCS # poriginNodeTN #== pconstant 1
-            , pbefore # pfromData foldConfF.stakingDeadline # info.validRange
+            , pbefore # pfromData foldConfF.freezeStake # info.validRange
             ]
     pure $
       pif
@@ -229,12 +229,12 @@ pmintCommitFold = phoistAcyclic $
 
 pfoldValidatorW :: Term s (PAsData PCurrencySymbol :--> PAsData PPOSIXTime :--> PValidator) -- todo provide stake CS
 pfoldValidatorW = phoistAcyclic $
-  plam $ \nodeCS stakingDeadline datum redeemer ctx ->
+  plam $ \nodeCS freezeStake datum redeemer ctx ->
     let dat = punsafeCoerce @_ @_ @PFoldDatum datum
         red = punsafeCoerce @_ @_ @PFoldAct redeemer
      in pmatch red $ \case
           PFoldNodes r -> pletFields @'["nodeIdxs"] r $ \redF ->
-            pfoldNodes # nodeCS # stakingDeadline # redF.nodeIdxs # dat # ctx
+            pfoldNodes # nodeCS # freezeStake # redF.nodeIdxs # dat # ctx
           PReclaim _ -> unTermCont $ do
             PPubKeyCredential ((pfield @"_0" #) -> ownerPkh) <- pmatchC (pfield @"credential" # (pfield @"owner" # dat))
             ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
@@ -274,7 +274,7 @@ pisSuccessor = plam $ \nodeCS accNode node -> unTermCont $ do
 
 pfoldNodes :: Term s (PAsData PCurrencySymbol :--> PAsData PPOSIXTime :--> PBuiltinList (PAsData PInteger) :--> PFoldDatum :--> PScriptContext :--> POpaque)
 pfoldNodes = phoistAcyclic $
-  plam $ \nodeCS stakingDeadline nodeIndices dat ctx -> unTermCont $ do
+  plam $ \nodeCS freezeStake nodeIndices dat ctx -> unTermCont $ do
     ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
     -- all reference inputs have node currency symbol
     -- all reference inputs are connected in the linked list
@@ -326,7 +326,7 @@ pfoldNodes = phoistAcyclic $
             , pfromData newFoldDatumF.committed #== newCommitFoldState.committed
             , newFoldDatumF.owner #== datF.owner
             , pnoAdaValue # ownOutputF.value #== pnoAdaValue # ownInputF.value
-            , pbefore # pfromData stakingDeadline # info.validRange
+            , pbefore # pfromData freezeStake # info.validRange
             ]
     pure $
       pif foldChecks (popaque (pconstant ())) perror

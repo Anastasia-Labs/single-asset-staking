@@ -325,11 +325,11 @@ pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
 
   passert "signed by user." (pelem # pkToRemove # sigs)
 
-  configF <- pletFields @'["stakingDeadline", "penaltyAddress"] config
+  configF <- pletFields @'["freezeStake", "penaltyAddress"] config
 
   let ownInputLovelace = plovelaceValueOf # removedValue -- todo stake token instead of lovelace
       ownInputFee = pdivideCeil # ownInputLovelace # 4
-      discDeadline = configF.stakingDeadline
+      discDeadline = configF.freezeStake
 
   let finalCheck =
         -- user committing before deadline

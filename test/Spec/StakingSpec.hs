@@ -106,14 +106,14 @@ mkStakingNodeMP = plam $ \config redm ctx -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action
       let insertChecks =
             pand'List
-              [ pafter # (pfield @"stakingDeadline" # config) # vrange
+              [ pafter # (pfield @"freezeStake" # config) # vrange
               , pelem # act.keyToInsert # sigs
               ]
       pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) (ptraceError "Insert must before deadline and include signature")
     PRemove action -> P.do
-      configF <- pletFields @'["stakingDeadline"] config
+      configF <- pletFields @'["freezeStake"] config
       act <- pletFields @'["keyToRemove", "coveringNode"] action
-      discDeadline <- plet configF.stakingDeadline
+      discDeadline <- plet configF.freezeStake
       pcond
         [
           ( pbefore # discDeadline # vrange
@@ -147,8 +147,8 @@ initMintedValue = singleton stakingCurrencySymbol stakingTokenName 1
 initUTxO :: TxOutRef
 initUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
 
-stakingDeadline :: POSIXTime
-stakingDeadline = POSIXTime 96_400_000
+freezeStake :: POSIXTime
+freezeStake = POSIXTime 96_400_000
 
 penaltyAddress :: Address
 penaltyAddress =
@@ -161,7 +161,7 @@ stakingConfig =
   pconstant
     ( StakingConfig
         { initUTxO
-        , stakingDeadline
+        , freezeStake
         , penaltyAddress
         }
     )
