@@ -40,27 +40,27 @@ import Types.StakingSet (PNodeValidatorAction (..), PStakingLaunchConfig (..), P
 import Utils (passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, phasCS, pheadSingleton, ptryOwnInput, ptryOwnOutput)
 
 pDiscoverGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PStakeValidator)
-pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardCS' _redeemer ctx -> P.do
+pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardFoldCS' _redeemer ctx -> P.do
   -- let rewardsIdx = pconvert @(PAsData PInteger) redeemer
   ctxF <- pletFields @'["txInfo"] ctx
   infoF <- pletFields @'["inputs"] ctxF.txInfo
-  rewardCS <- plet $ pfromData rewardCS'
-  let hasFoldToken = pany @PBuiltinList # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # rewardCS) # infoF.inputs
+  rewardFoldCS <- plet $ pfromData rewardFoldCS'
+  let hasFoldToken = pany @PBuiltinList # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # rewardFoldCS) # infoF.inputs
   -- let rewardInp = pelemAt @PBuiltinList # pfromData rewardsIdx # infoF.inputs
-  --     hasFoldToken = pvalueOf # (pfield @"value" # (pfield @"resolved" # rewardInp)) # pfromData rewardCS # rewardFoldTN #== 1
+  --     hasFoldToken = pvalueOf # (pfield @"value" # (pfield @"resolved" # rewardInp)) # pfromData rewardFoldCS # rewardFoldTN #== 1
   pif hasFoldToken (popaque $ pconstant ()) perror
 
 pStakingSetValidator ::
   Config ->
   ByteString ->
   ClosedTerm (PStakingLaunchConfig :--> PValidator)
-pStakingSetValidator cfg prefix = plam $ \discConfig dat redmn ctx' ->
+pStakingSetValidator cfg prefix = plam $ \config dat redmn ctx' ->
   let redeemer = pconvert @PNodeValidatorAction redmn
       oldDatum = pconvert @PStakingSetNode dat
    in pmatch redeemer $ \case
         PRewardFoldAct _ ->
           let stakeCerts = pfield @"wdrl" # (pfield @"txInfo" # ctx')
-              stakeScript = pfromData $ pfield @"globalCred" # discConfig
+              stakeScript = pfromData $ pfield @"globalCred" # config
            in pmatch (AssocMap.plookup # stakeScript # stakeCerts) $ \case
                 PJust _ -> (popaque $ pconstant ())
                 PNothing -> perror
@@ -88,7 +88,7 @@ pStakingSetValidator cfg prefix = plam $ \discConfig dat redmn ctx' ->
               (popaque $ pconstant ())
             PModifyCommitment _ -> P.do
               PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-              configF <- pletFields @'["stakingDeadline"] discConfig 
+              configF <- pletFields @'["stakingDeadline"] config 
               let ownOutput = ptryOwnOutput # info.outputs # ownValHash
               ownOutputF <- pletFields @'["value", "datum"] ownOutput
               POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum

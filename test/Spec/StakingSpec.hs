@@ -86,8 +86,8 @@ mkStakingNodeMP ::
         :--> PScriptContext
         :--> PUnit
     )
-mkStakingNodeMP = plam $ \discConfig redm ctx -> P.do
-  configF <- pletFields @'["initUTxO"] discConfig
+mkStakingNodeMP = plam $ \config redm ctx -> P.do
+  configF <- pletFields @'["initUTxO"] config
 
   (common, inputs, outs, sigs, vrange) <-
     runTermCont $
@@ -106,12 +106,12 @@ mkStakingNodeMP = plam $ \discConfig redm ctx -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action
       let insertChecks =
             pand'List
-              [ pafter # (pfield @"stakingDeadline" # discConfig) # vrange
+              [ pafter # (pfield @"stakingDeadline" # config) # vrange
               , pelem # act.keyToInsert # sigs
               ]
       pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) (ptraceError "Insert must before deadline and include signature")
     PRemove action -> P.do
-      configF <- pletFields @'["stakingDeadline"] discConfig
+      configF <- pletFields @'["stakingDeadline"] config
       act <- pletFields @'["keyToRemove", "coveringNode"] action
       discDeadline <- plet configF.stakingDeadline
       pcond
@@ -121,7 +121,7 @@ mkStakingNodeMP = plam $ \discConfig redm ctx -> P.do
           )
         ,
           ( pafter # discDeadline # vrange
-          , pRemove common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode
+          , pRemove common vrange config outs sigs # act.keyToRemove # act.coveringNode
           )
         ]
         perror
@@ -131,9 +131,9 @@ mkStakingNodeMPW ::
     ( PStakingConfig
         :--> PMintingPolicy
     )
-mkStakingNodeMPW = phoistAcyclic $ plam $ \discConfig redm ctx ->
+mkStakingNodeMPW = phoistAcyclic $ plam $ \config redm ctx ->
   let red = punsafeCoerce @_ @_ @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP # discConfig # red # ctx
+   in popaque $ mkStakingNodeMP # config # red # ctx
 
 stakingCurrencySymbol :: CurrencySymbol
 stakingCurrencySymbol = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b79a4"

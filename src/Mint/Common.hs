@@ -288,7 +288,7 @@ pRemove ::
   Term s (PBuiltinList PTxOut) ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
   Term s (PAsData PPubKeyHash :--> PAsData PStakingSetNode :--> PUnit)
-pRemove common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
+pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
   keyToRemove <- plet . pto . pfromData $ pkToRemove
   passert "Node does not cover key to remove" $
     coversKey # node # keyToRemove
@@ -325,7 +325,7 @@ pRemove common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
 
   passert "signed by user." (pelem # pkToRemove # sigs)
 
-  configF <- pletFields @'["stakingDeadline", "penaltyAddress"] discConfig
+  configF <- pletFields @'["stakingDeadline", "penaltyAddress"] config
 
   let ownInputLovelace = plovelaceValueOf # removedValue -- todo stake token instead of lovelace
       ownInputFee = pdivideCeil # ownInputLovelace # 4

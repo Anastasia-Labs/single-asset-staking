@@ -93,7 +93,7 @@ pmintTokenHolder = phoistAcyclic $
       pif ( mintChecks ) (pconstant ()) perror
 
 prewardTokenHolder :: Term s (PAsData PCurrencySymbol :--> PValidator)
-prewardTokenHolder = phoistAcyclic $ plam $ \rewardsCS _dat _redeemer ctx -> unTermCont $ do 
+prewardTokenHolder = phoistAcyclic $ plam $ \rewardFoldCS _dat _redeemer ctx -> unTermCont $ do 
   ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx 
   infoF <- pletFieldsC @'["inputs", "mint"] ctxF.txInfo
 
@@ -109,7 +109,7 @@ prewardTokenHolder = phoistAcyclic $ plam $ \rewardsCS _dat _redeemer ctx -> unT
       tkhPair = (pheadSingleton # tkhPairs)
       thkMinted = psndBuiltin # tkhPair 
 
-  tkPairs <- pletC $ ptryLookupValue # rewardsCS # mintedValue
+  tkPairs <- pletC $ ptryLookupValue # rewardFoldCS # mintedValue
   tkPair <- pletC (pheadSingleton # tkPairs)
   let rewardTkMinted = psndBuiltin # tkPair 
   
