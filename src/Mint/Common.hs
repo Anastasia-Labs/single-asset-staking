@@ -134,6 +134,7 @@ parseNodeOutputUtxo = phoistAcyclic $
     passert "Incorrect token name" $ nodeKey #== datumKey
     passert "Does not hold nodeAda" $
       plovelaceValueOf # value #>= minCommitment
+    -- todo checks minimumStake, number of nodeTokens = 3, maxStakeCommitment?, add config
     pcon (PPair value datum)
 
 makeCommon ::
@@ -166,7 +167,7 @@ makeCommon ctx' = do
   -- refInsAsOuts <- tcont . plet $ asOuts # pfromData info.referenceInputs
   hasNodeTk <- tcont . plet $ phasDataCS # ownCS
   insAsOuts <- tcont . plet $ asOuts # pfromData info.inputs
-  onlyAtNodeVal <- tcont . plet $ pfilter # plam (\txo -> (hasNodeTk # (pfield @"value" # txo)))
+  onlyAtNodeVal <- tcont . plet $ pfilter # plam (\utxo -> (hasNodeTk # (pfield @"value" # utxo)))
   fromNodeValidator <- tcont . plet $ onlyAtNodeVal # insAsOuts
   toNodeValidator <- tcont . plet $ onlyAtNodeVal # info.outputs
   ------------------------------
@@ -326,7 +327,7 @@ pRemove common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
 
   configF <- pletFields @'["stakingDeadline", "penaltyAddress"] discConfig
 
-  let ownInputLovelace = plovelaceValueOf # removedValue
+  let ownInputLovelace = plovelaceValueOf # removedValue -- todo stake token instead of lovelace
       ownInputFee = pdivideCeil # ownInputLovelace # 4
       discDeadline = configF.stakingDeadline
 
@@ -376,7 +377,7 @@ pClaim common outs sigs = plam $ \pkToRemove -> P.do
   passert "signed by user." (pelem # pkToRemove # sigs)
 
   -- verify that this node has been processed by the rewards fold by checking that count of tokens is 3.
-  passert "Claim broke phase rules." (pcountOfUniqueTokens # removedValue #>= 3)
+  passert "Claim broke phase rules." (pcountOfUniqueTokens # removedValue #>= 3) -- todo how to check rewards fold is over if stake token == reward token
 
   pconstant ()
 

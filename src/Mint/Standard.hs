@@ -35,7 +35,7 @@ import Types.StakingSet (PStakingConfig (..), PStakingNodeAction (..))
 import Utils (pand'List, passert, pcond)
 
 --------------------------------
--- FinSet Node Minting Policy:
+-- Staking Node Minting Policy
 --------------------------------
 
 mkStakingNodeMP ::

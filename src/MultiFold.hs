@@ -51,7 +51,7 @@ import Plutarch.Unsafe (punsafeCoerce)
 import PlutusLedgerApi.V2
 import PlutusTx qualified
 import Types.Classes
-import Types.Constants (commitFoldTN, foldingFee, minAda, nodeAda, poriginNodeTN, projectTokenHolderTN, rewardFoldTN)
+import Types.Constants (commitFoldTN, foldingFee, minAda, nodeAda, poriginNodeTN, rewardTokenHolderTN, rewardFoldTN)
 import Types.StakingSet
 import Utils (
   pand'List,
@@ -227,7 +227,7 @@ pmintCommitFold = phoistAcyclic $
         (pconstant ())
         perror
 
-pfoldValidatorW :: Term s (PAsData PCurrencySymbol :--> PAsData PPOSIXTime :--> PValidator)
+pfoldValidatorW :: Term s (PAsData PCurrencySymbol :--> PAsData PPOSIXTime :--> PValidator) -- todo provide stake CS
 pfoldValidatorW = phoistAcyclic $
   plam $ \nodeCS stakingDeadline datum redeemer ctx ->
     let dat = punsafeCoerce @_ @_ @PFoldDatum datum
@@ -267,7 +267,7 @@ pisSuccessor = plam $ \nodeCS accNode node -> unTermCont $ do
         pcon @PCommitFoldState
           accNodeF
             { next = toScott (pfromData currNodeF.next)
-            , committed = accNodeF.committed + (plovelaceValueOf # nodeValue) - nodeAda
+            , committed = accNodeF.committed + (plovelaceValueOf # nodeValue) - nodeAda -- todo accumulate stakeToken
             -- , num = accNodeF.num + 1
             }
   pure $ pif (pand' # (accNodeF.next #== nodeKey) # hasNodeTk) accState perror
@@ -444,7 +444,7 @@ pmintRewardFoldPolicyW = phoistAcyclic $
           pfield @"resolved"
             #$ pheadSingleton
             # ( pfilter @PBuiltinList
-                  # plam (\inp -> pvalueOf # (pfield @"value" # (pfield @"resolved" # inp)) # rewardConfigF.tokenHolderCS # projectTokenHolderTN #== 1)
+                  # plam (\inp -> pvalueOf # (pfield @"value" # (pfield @"resolved" # inp)) # rewardConfigF.tokenHolderCS # rewardTokenHolderTN #== 1)
                   # info.inputs
               )
         numMinted = psndBuiltin # tkPair
@@ -472,7 +472,7 @@ pmintRewardFoldPolicyW = phoistAcyclic $
           pand'List
             [ pfromData numMinted #== 1
             , foldOutDatumF.currNode #== refInpDat
-            , totalProjectTkns #== pvalueOf # foldOutputF.value # rewardConfigF.projectCS # rewardConfigF.projectTN
+            , totalProjectTkns #== pvalueOf # foldOutputF.value # rewardConfigF.projectCS # rewardConfigF.projectTN -- todo rewardCS rewardTN
             , totalProjectTkns #== pvalueOf # (pfield @"value" # projectInput) # rewardConfigF.projectCS # rewardConfigF.projectTN
             , pvalueOf # foldOutputF.value # pfromData ownPolicyId # rewardFoldTN #== 1
             , pcountOfUniqueTokens # foldOutputF.value #== 3
@@ -483,7 +483,7 @@ pmintRewardFoldPolicyW = phoistAcyclic $
                     PKey _ -> pconstant False
                 )
             , commitDatF.committed #== foldOutDatumF.totalCommitted
-            , pvalueOf # mintedValue # rewardConfigF.tokenHolderCS # projectTokenHolderTN #== -1
+            , pvalueOf # mintedValue # rewardConfigF.tokenHolderCS # rewardTokenHolderTN #== -1
             ]
     pure $
       pif
@@ -521,7 +521,8 @@ prewardSuccessor nodeCS projectCS projectTN totalProjectTokens totalCommitted st
   let nodeInpDat = punsafeCoerce @_ @_ @PStakingSetNode (pfield @"outputDatum" # nodeInpDatum)
   nodeInDatF <- pletFieldsC @'["key", "next"] nodeInpDat
 
-  nodeCommitment <- pletC $ plovelaceValueOf # inputValue - nodeAda
+  -- todo update calculations
+  nodeCommitment <- pletC $ plovelaceValueOf # inputValue - nodeAda 
   owedProjectTokens <- pletC $ pdiv # (nodeCommitment * totalProjectTokens) # totalCommitted
 
   nodeOutputF <- pletFieldsC @'["address", "value", "datum"] outputNode
@@ -547,6 +548,7 @@ prewardSuccessor nodeCS projectCS projectTN totalProjectTokens totalCommitted st
             }
   pure $ pif successorChecks accState perror
 
+-- todo add stakeToken, better pass as config
 pfoldCorrespondingUTxOs ::
   Term s PCurrencySymbol ->
   Term s PCurrencySymbol ->
@@ -655,7 +657,7 @@ prewardFoldNodes = phoistAcyclic $ plam $ \rewardConfig inputIdxs outputIdxs dat
           , newDatumF.owner #== datF.owner
           , newRewardsFoldState.next #== (toScott $ pfromData newFoldNodeF.next)
           , pnormalize # (Value.pforgetPositive ownInputF.value <> Value.psingleton # projCS # projTN # (-newRewardsFoldState.owedProjectTkns)) #== Value.pforgetPositive ownOutputF.value
-          , pvalueOf # (pfield @"value" # projectOut) # padaSymbol # padaToken #== newRewardsFoldState.receivedCommitment
+          , pvalueOf # (pfield @"value" # projectOut) # padaSymbol # padaToken #== newRewardsFoldState.receivedCommitment -- todo no commitment to be taken at all
           , (pcountScriptInputs # txIns) #== newRewardsFoldState.foldCount
           ]
   pure $
@@ -695,7 +697,7 @@ prewardFoldNode = phoistAcyclic $
 
     nodeInputValue <- pletC nodeInputF.value
 
-    nodeCommitment <- pletC $ plovelaceValueOf # nodeInputValue - nodeAda
+    nodeCommitment <- pletC $ plovelaceValueOf # nodeInputValue - nodeAda -- todo stake token value as commitment
     owedProjectTkns <- pletC $ pdiv # (nodeCommitment * oldTotalProjectTokens) # oldTotalCommitted
     -- doesn't work with no decimal tokens
     let nodeInpDat = punsafeCoerce @_ @_ @PStakingSetNode (pfield @"outputDatum" # nodeInpDatum)
@@ -703,7 +705,7 @@ prewardFoldNode = phoistAcyclic $
 
     let nodeOutput = ptryOutputToAddress # txOuts # nodeInputF.address
     nodeOutputF <- pletFieldsC @'["value"] nodeOutput
-
+    -- todo update value creations for ada, rewardToken and stakeToken
     mkProjValue <- pletC $ Value.psingleton # rewardConfigF.projectCS # rewardConfigF.projectTN
     mkAdaValue <- pletC $ Value.psingleton # padaSymbol # padaToken
     distributedValue <- pletC $ mkProjValue # (-owedProjectTkns)
@@ -722,7 +724,7 @@ prewardFoldNode = phoistAcyclic $
             , foldOutDatumF.totalProjectTokens #== oldTotalProjectTokens
             , foldOutDatumF.owner #== datF.owner
             , (pnoAdaValue # correctOwnOutput) #== (pnoAdaValue #$ pforgetPositive ownOutputF.value)
-            , correctNodeOutput #== (pforgetPositive nodeOutputF.value)
-            , pforgetPositive (pfield @"value" # projectOut) #== posCollectedAdaValue
+            , correctNodeOutput #== (pforgetPositive nodeOutputF.value)  -- todo update according to changes
+            , pforgetPositive (pfield @"value" # projectOut) #== posCollectedAdaValue -- todo no collected amount
             ]
     pure $ pif foldChecks (popaque (pconstant ())) perror

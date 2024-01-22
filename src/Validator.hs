@@ -83,19 +83,19 @@ pStakingSetValidator cfg prefix = plam $ \discConfig dat redmn ctx' ->
             PLinkedListAct _ -> P.do
               -- TODO: Currently launchpad token cannot start with FSN
               passert
-                "Must mint/burn for any FinSet input"
+                "Must mint/burn for any StakingSet input"
                 (pcontainsCurrencySymbols # pfromData info.mint # potentialNodeCSs)
               (popaque $ pconstant ())
             PModifyCommitment _ -> P.do
               PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-              configF <- pletFields @'["stakingDeadline"] discConfig
+              configF <- pletFields @'["stakingDeadline"] discConfig 
               let ownOutput = ptryOwnOutput # info.outputs # ownValHash
               ownOutputF <- pletFields @'["value", "datum"] ownOutput
               POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum
               let newDatum = pfromPDatum @PStakingSetNode # ownOutputDatum
               passert "Cannot modify datum when committing" (newDatum #== oldDatum)
-              passert "Cannot modify non-ada value" (pnoAdaValue # ownInputF.value #== pnoAdaValue # ownOutputF.value)
-              passert "Cannot reduce ada value" (plovelaceValueOf # ownInputF.value #< plovelaceValueOf # ownOutputF.value + 10_000_000)
+              passert "Cannot modify non-ada value" (pnoAdaValue # ownInputF.value #== pnoAdaValue # ownOutputF.value) -- todo non-ada value except stake-token
+              passert "Cannot reduce ada value" (plovelaceValueOf # ownInputF.value #< plovelaceValueOf # ownOutputF.value + 10_000_000) -- todo all value except stake-token to remain same
               passert "No tokens minted" (pfromData info.mint #== mempty)
               passert "deadline passed" ((pafter # (pfromData configF.stakingDeadline - 86_400) # info.validRange))
               (popaque $ pconstant ())
