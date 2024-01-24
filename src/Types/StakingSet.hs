@@ -40,7 +40,7 @@ import Plutarch.Api.V2 (
   PPubKeyHash (PPubKeyHash),
   PScriptHash (..),
   PStakingCredential (..),
-  PTxOutRef,
+  PTxOutRef, PTokenName,
  )
 import Plutarch.DataRepr (
   DerivePConstantViaData (DerivePConstantViaData),
@@ -49,13 +49,13 @@ import Plutarch.DataRepr (
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, POSIXTime, PubKeyHash, TxOutRef)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, POSIXTime, PubKeyHash, TxOutRef, CurrencySymbol, TokenName)
 import PlutusTx qualified
 import Types.Classes
 
 data NodeValidatorAction
   = LinkedListAct
-  | ModifyCommitment
+  | ModifyStake
   | RewardFoldAct
   deriving stock (Generic, Show)
 
@@ -63,7 +63,7 @@ PlutusTx.unstableMakeIsData ''NodeValidatorAction
 
 data PNodeValidatorAction (s :: S)
   = PLinkedListAct (Term s (PDataRecord '[]))
-  | PModifyCommitment (Term s (PDataRecord '[]))
+  | PModifyStake (Term s (PDataRecord '[]))
   | PRewardFoldAct (Term s (PDataRecord '[]))
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PShow)
@@ -88,8 +88,10 @@ data PStakingLaunchConfig (s :: S)
           s
           ( PDataRecord
               '[ "freezeStake" ':= PPOSIXTime
-               , "penaltyAddress" ':= PAddress
                , "globalCred" ':= PStakingCredential
+               , "stakeCS" ':= PCurrencySymbol
+               , "stakeTN" ':= PTokenName
+               , "minimumStake" ':= PInteger
                ]
           )
       )
@@ -101,7 +103,11 @@ instance DerivePlutusType PStakingLaunchConfig where type DPTStrat _ = PlutusTyp
 data StakingConfig = StakingConfig
   { initUTxO :: TxOutRef
   , freezeStake :: POSIXTime
+  , endStaking :: POSIXTime
   , penaltyAddress :: Address
+  , stakeCS :: CurrencySymbol
+  , stakeTN :: TokenName
+  , minimumStake :: Integer
   }
 
 PlutusTx.makeIsDataIndexed ''StakingConfig ([('StakingConfig, 0)])
@@ -113,7 +119,11 @@ data PStakingConfig (s :: S)
           ( PDataRecord
               '[ "initUTxO" ':= PTxOutRef
                , "freezeStake" ':= PPOSIXTime
+               , "endStaking" ':= PPOSIXTime
                , "penaltyAddress" ':= PAddress
+               , "stakeCS" ':= PCurrencySymbol
+               , "stakeTN" ':= PTokenName
+               , "minimumStake" ':= PInteger
                ]
           )
       )
@@ -209,7 +219,6 @@ data PStakingSetNode (s :: S)
           ( PDataRecord
               '[ "key" ':= PNodeKey
                , "next" ':= PNodeKey
-               -- , "commitment" ':= PInteger
                ]
           )
       )
@@ -232,6 +241,7 @@ deriving via
   instance
     PConstantDecl StakingSetNode
 
+
 instance ScottConvertible PStakingSetNode where
   type ScottOf PStakingSetNode = PStakingSetNodeState
   toScott discSetNode' = pmatch discSetNode' $ \(PStakingSetNode discSetNode) -> pletFields @'["key", "next"] discSetNode $ \discSetNodeF ->
@@ -248,7 +258,6 @@ instance ScottConvertible PStakingSetNode where
                   ( pdcons @"key"
                       # pdata (fromScott key)
                       #$ (pdcons @"next" # pdata (fromScott next))
-                      -- #$ (pdcons @"commitment" # pdata 0)
                       #$ pdnil
                   )
               )
@@ -289,6 +298,9 @@ data PStakingNodeAction (s :: S)
   deriving anyclass (PlutusType, PIsData, PEq)
 
 instance DerivePlutusType PStakingNodeAction where type DPTStrat _ = PlutusTypeData
+
+deriving anyclass instance
+  PTryFrom PData PStakingNodeAction
 
 deriving anyclass instance
   PTryFrom PData (PAsData PStakingNodeAction)

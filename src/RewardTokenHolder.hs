@@ -25,7 +25,6 @@ import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pmatchC,
  )
 import Plutarch.Prelude
-import Plutarch.Unsafe (punsafeCoerce)
 import Types.Constants (rewardTokenHolderTN)
 import Utils (
   pand'List,
@@ -35,6 +34,7 @@ import Utils (
   pfindCurrencySymbolsByTokenName
  )
 import Utils (ptryOwnInput)
+import Conversions (pconvert)
 
 data PTokenHolderMintAct (s :: S)
   = PMintHolder (Term s (PDataRecord '[]))
@@ -52,7 +52,7 @@ instance PTryFrom PData (PAsData PTokenHolderMintAct)
 pmintRewardTokenHolder :: Term s (PTxOutRef :--> PMintingPolicy)
 pmintRewardTokenHolder = phoistAcyclic $ 
   plam $ \oref redm ctx ->
-    let red = punsafeCoerce @_ @_ @PTokenHolderMintAct redm 
+    let red = pconvert @PTokenHolderMintAct redm 
      in pmatch red $ \case 
           PMintHolder _ -> popaque $ pmintTokenHolder # oref # ctx 
           PBurnHolder _ -> popaque $ pburnTokenHolder # ctx 

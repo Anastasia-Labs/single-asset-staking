@@ -1,6 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
-
 module Main (main) where
 
 import Cardano.Binary qualified as CBOR
@@ -11,7 +8,6 @@ import Data.Bifunctor (
  )
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Lazy qualified as LBS
-import Data.Default (def)
 import Data.Text (
   Text,
   pack,
@@ -21,7 +17,7 @@ import Mint.Standard (mkStakingNodeMPW)
 import MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW)
 import Plutarch (
   Config (Config),
-  TracingMode (DoTracing, NoTracing),
+  TracingMode (NoTracing),
   compile,
  )
 import Plutarch.Evaluate (
@@ -33,16 +29,13 @@ import PlutusLedgerApi.V2 (
   Data,
   ExBudget,
  )
-import Ply.Plutarch (
-  writeTypedScript,
- )
-import System.IO
 import Validator (pDiscoverGlobalLogicW, pStakingSetValidator)
 import AlwaysFails (pAlwaysFails, pAuthMint)
 import RewardTokenHolder (prewardTokenHolder, pmintRewardTokenHolder)
 import "liqwid-plutarch-extra" Plutarch.Extra.Script (
   applyArguments,
  )
+import Types.Constants (psetNodePrefix)
 
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript
@@ -72,7 +65,7 @@ main :: IO ()
 main = do
   putStrLn "Exporting Single Asset Staking Scripts"
   writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/stakingStakeValidator.json" pDiscoverGlobalLogicW
-  writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator def "FSN"
+  writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator $ plift psetNodePrefix
   writePlutusScript "Single Asset Staking - Minting Validator" "./compiled/stakingMint.json" $ mkStakingNodeMPW
   writePlutusScript "Commit Fold Validator" "./compiled/foldValidator.json" pfoldValidatorW
   writePlutusScript "Commit Fold Mint" "./compiled/foldMint.json" pmintFoldPolicyW

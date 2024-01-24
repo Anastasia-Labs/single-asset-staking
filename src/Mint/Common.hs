@@ -1,9 +1,4 @@
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-{-# OPTIONS_GHC -Wno-missing-export-lists #-}
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-matches #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Mint.Common (
@@ -18,7 +13,6 @@ module Mint.Common (
 
 import Mint.Helpers (
   correctNodeTokenMinted,
-  correctNodeTokensMinted,
   coversKey,
  )
 import Plutarch.Api.V1.Value (plovelaceValueOf, pnormalize, pvalueOf)
@@ -31,22 +25,18 @@ import Plutarch.Api.V2 (
   PPOSIXTime,
   PPubKeyHash,
   PScriptContext,
-  PScriptHash (..),
   PScriptPurpose (PMinting),
   PTxInInfo,
   PTxOut,
   PValue,
  )
-import Plutarch.Extra.Interval (pafter, pbefore)
+import Plutarch.Extra.Interval (pafter)
 import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
-import Plutarch.Internal (Config (..))
 import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
-import Plutarch.Positive (PPositive)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import PlutusLedgerApi.V2 (CurrencySymbol)
-import Types.Constants (minAda, minCommitment, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.Constants (exactAdaCommitment, pnodeKeyTN, poriginNodeTN, pparseNodeKey, nodeAda)
 import Types.StakingSet (
   PNodeKey (..),
   PStakingConfig,
@@ -54,27 +44,19 @@ import Types.StakingSet (
   asPredecessorOf,
   asSuccessorOf,
   isEmptySet,
-  isFirstNode,
-  isLastNode,
-  isNothing,
   validNode,
  )
 import Utils (
   pand'List,
   passert,
   paysToAddress,
-  paysToCredential,
   pcheck,
   pcountOfUniqueTokens,
   pfindCurrencySymbolsByTokenPrefix,
   pfindWithRest,
-  phasCS,
   phasDataCS,
   pheadSingleton,
-  pmapMaybe,
-  pmustFind,
   psingletonOfCS,
-  pvalueOfOne,
   (#>),
   (#>=),
  )
@@ -109,12 +91,14 @@ nodeInputUtxoDatumUnsafe = phoistAcyclic $
 
 parseNodeOutputUtxo ::
   ClosedTerm
-    ( PAsData PCurrencySymbol
+    ( PStakingConfig
+        :--> PAsData PCurrencySymbol
         :--> PTxOut
         :--> PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)
     )
 parseNodeOutputUtxo = phoistAcyclic $
-  plam $ \nodeCS out -> P.do
+  plam $ \config nodeCS out -> P.do
+    configF <- pletFields @'["stakeCS", "stakeTN", "minimumStake"] config
     txOut <- pletFields @'["address", "value", "datum"] out
     value <- plet $ pfromData $ txOut.value
     PPair tn amount <- pmatch $ psingletonOfCS # nodeCS # value
@@ -128,17 +112,20 @@ parseNodeOutputUtxo = phoistAcyclic $
     -- Prevents TokenDust attack
     passert "All FSN tokens from node policy" $
       pheadSingleton # (pfindCurrencySymbolsByTokenPrefix # value # pconstant "FSN") #== nodeCS
-    passert "Too many assets" $ pcountOfUniqueTokens # value #== 2
+    passert "Insufficient stake" $ 
+      pvalueOf # value # configF.stakeCS # configF.stakeTN #>= configF.minimumStake
+    passert "Too many assets" $ pcountOfUniqueTokens # value #== 3
     passert "Incorrect number of nodeTokens" $ amount #== 1
     passert "node is not ordered" $ validNode # datum
     passert "Incorrect token name" $ nodeKey #== datumKey
-    passert "Does not hold nodeAda" $
-      plovelaceValueOf # value #>= minCommitment
-    -- todo checks minimumStake, number of nodeTokens = 3, maxStakeCommitment?, add config
+    passert "Must have exactly 4 ADA" $
+      plovelaceValueOf # value #== exactAdaCommitment
+    -- todo maxStakeCommitment?
     pcon (PPair value datum)
 
 makeCommon ::
   forall {r :: PType} {s :: S}.
+  Term s PStakingConfig ->
   Term s PScriptContext ->
   TermCont @r
     s
@@ -148,9 +135,8 @@ makeCommon ::
     , Term s (PBuiltinList (PAsData PPubKeyHash))
     , Term s (PInterval PPOSIXTime)
     )
-makeCommon ctx' = do
-  ------------------------------
-  -- Preparing info needed for validation:
+makeCommon config ctx' = do
+  -- Preparing info needed for validation
   ctx <- tcont $ pletFields @'["txInfo", "purpose"] ctx'
   info <-
     tcont $
@@ -170,7 +156,6 @@ makeCommon ctx' = do
   onlyAtNodeVal <- tcont . plet $ pfilter # plam (\utxo -> (hasNodeTk # (pfield @"value" # utxo)))
   fromNodeValidator <- tcont . plet $ onlyAtNodeVal # insAsOuts
   toNodeValidator <- tcont . plet $ onlyAtNodeVal # info.outputs
-  ------------------------------
 
   let atNodeValidator =
         pelimList
@@ -190,7 +175,7 @@ makeCommon ctx' = do
   nodeOutputs <-
     tcont . plet $
       pmap
-        # (parseNodeOutputUtxo # ownCS)
+        # (parseNodeOutputUtxo # config # ownCS)
         #$ pconvertLists
         # toNodeValidator
 
@@ -317,36 +302,32 @@ pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
 
     Error is more explicit simply for debugging
   -}
-  passert "There must be exactly one output with update node" $
+  passert "There must be exactly one output with updated node" $
     pany # plam (\nodePair -> pmatch nodePair (\(PPair val dat) -> node #== dat #&& stayValue #== val)) # common.nodeOutputs
 
   passert "Incorrect mint for Remove" $
     correctNodeTokenMinted # common.ownCS # nodeToRemoveTN # (-1) # common.mint
 
-  passert "signed by user." (pelem # pkToRemove # sigs)
+  passert "Incorrect signature" (pelem # pkToRemove # sigs)
 
-  configF <- pletFields @'["freezeStake", "penaltyAddress"] config
+  configF <- pletFields @'["freezeStake", "penaltyAddress", "stakeCS", "stakeTN"] config
 
-  let ownInputLovelace = plovelaceValueOf # removedValue -- todo stake token instead of lovelace
-      ownInputFee = pdivideCeil # ownInputLovelace # 4
-      discDeadline = configF.freezeStake
+  let ownInputStake = pvalueOf # removedValue # configF.stakeCS # configF.stakeTN
+      ownInputFee = pdivideCeil # ownInputStake # 4 -- Penalty fee is 25% of stake 
 
   let finalCheck =
-        -- user committing before deadline
+        -- check if user is unstaking before or after freezeStake
         ( pif
-            (pafter # (discDeadline - 24 * 60 * 60 * 1000) # vrange) -- user committing before 24 hours before deadline
+            (pafter # configF.freezeStake # vrange) -- user unstaking before stake is frozen
             (pconstant True)
             ( pany
                 # plam
                   ( \out ->
-                      pfield @"address"
-                        # out
-                        #== configF.penaltyAddress
-                        #&& ownInputFee
-                        #<= plovelaceValueOf
-                        # (pfield @"value" # out)
+                      pfield @"address" # out #== configF.penaltyAddress
+                      #&& ownInputFee #<= pvalueOf
+                        # (pfield @"value" # out) # configF.stakeCS # configF.stakeTN
                   )
-                # outs -- must pay 25% fee
+                # outs -- must pay 25% penalty fee
             )
         )
 
@@ -357,10 +338,9 @@ pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
 pClaim ::
   forall (s :: S).
   PStakingCommon s ->
-  Term s (PBuiltinList PTxOut) ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
   Term s (PAsData PPubKeyHash :--> PUnit)
-pClaim common outs sigs = plam $ \pkToRemove -> P.do
+pClaim common sigs = plam $ \pkToRemove -> P.do
   keyToRemove <- plet . pto . pfromData $ pkToRemove
 
   -- Input Checks
@@ -374,10 +354,16 @@ pClaim common outs sigs = plam $ \pkToRemove -> P.do
   passert "Incorrect mint for Remove" $
     correctNodeTokenMinted # common.ownCS # nodeToRemoveTN # (-1) # common.mint
 
-  passert "signed by user." (pelem # pkToRemove # sigs)
+  passert "Incorrect signature" (pelem # pkToRemove # sigs)
 
-  -- verify that this node has been processed by the rewards fold by checking that count of tokens is 3.
-  passert "Claim broke phase rules." (pcountOfUniqueTokens # removedValue #>= 3) -- todo how to check rewards fold is over if stake token == reward token
+  {- 
+    Verify that this node has been processed by the rewards fold.
+    This cannot be accomplished by checking count of unique tokens in the node,
+    as it would fail in the scenario when stake token is same as reward token.
+    Check if the node has paid folding fee to confirm it has undergone rewards fold.
+    exactAdaCommitment - foldingFee == nodeAda
+  -}
+  passert "Claim broke phase rules" (plovelaceValueOf # removedValue #== nodeAda)
 
   pconstant ()
 
