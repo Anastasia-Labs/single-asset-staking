@@ -39,7 +39,7 @@ import PlutusLedgerApi.V2 (
 import PlutusTx qualified
 import Test.Tasty (TestTree)
 
-import Mint.Standard (mkStakingNodeMPW)
+import Mint.Standard (mkStakingNodeMP)
 import Plutarch.Prelude
 import Types.Constants (exactAdaCommitment, poriginNodeTN)
 import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
@@ -47,6 +47,15 @@ import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAct
 import Conversions (pconvert)
 import Plutarch.Api.V2 (PMintingPolicy)
 import Types.StakingSet (PStakingNodeAction (..))
+
+mkStakingNodeMPW ::
+  ClosedTerm
+    ( PStakingConfig
+        :--> PMintingPolicy
+    )
+mkStakingNodeMPW = phoistAcyclic $ plam $ \config redm ctx ->
+  let red = pconvert @PStakingNodeAction redm
+   in popaque $ mkStakingNodeMP # config # red # ctx
 
 nodeCS :: CurrencySymbol
 nodeCS = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b79a4"
