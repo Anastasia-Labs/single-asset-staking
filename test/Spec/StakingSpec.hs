@@ -1,40 +1,24 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Spec.StakingSpec (unitTest) where
 
-import Plutarch.Api.V2 (
-  PMintingPolicy,
-  PScriptContext,
-  PTxOutRef,
- )
-import Plutarch.Internal (Config (Config), TracingMode (DoTracing))
-
 import Plutarch.Context (
-  Builder,
-  MintingBuilder,
   UTXO,
   address,
   buildMinting',
   input,
   mint,
   output,
-  referenceInput,
-  script,
   signedWith,
   timeRange,
   txId,
   withInlineDatum,
   withMinting,
-  withRedeemer,
   withRefIndex,
   withRefTxId,
   withValue,
-  withdrawal,
  )
-import Plutarch.Extra.Interval (pafter, pbefore)
-import Plutarch.Test.Precompiled (Expectation (Failure, Success), testEvalCase, tryFromPTerm)
-import PlutusLedgerApi.V1 (POSIXTimeRange)
+import Plutarch.Test.Precompiled (Expectation (Success), testEvalCase, tryFromPTerm)
+import PlutusLedgerApi.V1 (POSIXTimeRange, Value)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 import PlutusLedgerApi.V2 (
   Address (..),
@@ -47,108 +31,48 @@ import PlutusLedgerApi.V2 (
   ScriptContext,
   StakingCredential (..),
   TokenName,
-  TxId (..),
   TxOutRef (..),
-  Value,
   singleton,
  )
 
 import PlutusTx qualified
 import Test.Tasty (TestTree)
 
-import Mint.Common (
-  PStakingCommon (mint, ownCS),
-  makeCommon,
-  pClaim,
-  pDeinit,
-  pInit,
-  pInsert,
-  pRemove,
- )
-import Mint.Helpers (
-  hasUtxoWithRef,
- )
-import Plutarch.Monadic qualified as P
-import Plutarch.Unsafe (punsafeCoerce)
-
 import Plutarch.Prelude
-import Types.StakingSet (PStakingConfig (..), PStakingNodeAction (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
-import Utils (pand'List, passert, pcond)
+import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
+import Mint.Standard (mkStakingNodeMPW)
+import Types.Constants (poriginNodeTN, exactAdaCommitment)
 
---------------------------------
--- FinSet Node Minting Policy:
---------------------------------
+import Types.StakingSet (PStakingNodeAction (..))
+import Conversions (pconvert)
+import Plutarch.Api.V2 (PMintingPolicy)
 
-mkStakingNodeMP ::
-  ClosedTerm
-    ( PStakingConfig
-        :--> PStakingNodeAction
-        :--> PScriptContext
-        :--> PUnit
-    )
-mkStakingNodeMP = plam $ \config redm ctx -> P.do
-  configF <- pletFields @'["initUTxO"] config
+nodeCS :: CurrencySymbol
+nodeCS = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b79a4"
 
-  (common, inputs, outs, sigs, vrange) <-
-    runTermCont $
-      makeCommon ctx
+originNodeTN :: TokenName
+originNodeTN = plift poriginNodeTN
 
-  pmatch redm $ \case
-    PInit _ -> P.do
-      pif
-        (hasUtxoWithRef # configF.initUTxO # inputs)
-        (pInit common)
-        (ptraceError "Init must consume TxOutRef")
-    PDeinit _ ->
-      -- TODO deinit must check that reward fold has been completed
-      pDeinit common
-    PInsert action -> P.do
-      act <- pletFields @'["keyToInsert", "coveringNode"] action
-      let insertChecks =
-            pand'List
-              [ pafter # (pfield @"freezeStake" # config) # vrange
-              , pelem # act.keyToInsert # sigs
-              ]
-      pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) (ptraceError "Insert must before deadline and include signature")
-    PRemove action -> P.do
-      configF <- pletFields @'["freezeStake"] config
-      act <- pletFields @'["keyToRemove", "coveringNode"] action
-      discDeadline <- plet configF.freezeStake
-      pcond
-        [
-          ( pbefore # discDeadline # vrange
-          , pClaim common outs sigs # act.keyToRemove
-          )
-        ,
-          ( pafter # discDeadline # vrange
-          , pRemove common vrange config outs sigs # act.keyToRemove # act.coveringNode
-          )
-        ]
-        perror
+mintOriginNode :: Value
+mintOriginNode = singleton nodeCS originNodeTN 1
 
-mkStakingNodeMPW ::
-  ClosedTerm
-    ( PStakingConfig
-        :--> PMintingPolicy
-    )
-mkStakingNodeMPW = phoistAcyclic $ plam $ \config redm ctx ->
-  let red = punsafeCoerce @_ @_ @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP # config # red # ctx
+stakeCS :: CurrencySymbol
+stakeCS = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b7000"
 
-stakingCurrencySymbol :: CurrencySymbol
-stakingCurrencySymbol = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b79a4"
+stakeTN :: TokenName
+stakeTN = "MIN"
 
-stakingTokenName :: TokenName
-stakingTokenName = "FSN"
-
-initMintedValue :: Value
-initMintedValue = singleton stakingCurrencySymbol stakingTokenName 1
+minimumStake :: Integer
+minimumStake = 1_000
 
 initUTxO :: TxOutRef
 initUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
 
 freezeStake :: POSIXTime
 freezeStake = POSIXTime 96_400_000
+
+endStaking :: POSIXTime
+endStaking = POSIXTime 196_400_000
 
 penaltyAddress :: Address
 penaltyAddress =
@@ -162,7 +86,11 @@ stakingConfig =
     ( StakingConfig
         { initUTxO
         , freezeStake
+        , endStaking
         , penaltyAddress
+        , stakeCS
+        , stakeTN
+        , minimumStake
         }
     )
 
@@ -187,7 +115,7 @@ headUTXO :: UTXO
 headUTXO =
   mconcat
     [ address headAddr
-    , withValue (singleton "" "" 9_000_000 <> initMintedValue)
+    , withValue (singleton "" "" 4_000_000 <> mintOriginNode <> mkStakeValue minimumStake)
     , withInlineDatum $
         MkSetNode
           { key = Empty
@@ -202,23 +130,23 @@ initScriptContext =
       [ txId "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d"
       , input initUTXO
       , output headUTXO
-      , mint initMintedValue
-      , withMinting stakingCurrencySymbol
+      , mint mintOriginNode
+      , withMinting nodeCS
       ]
 
 deinitAction :: StakingNodeAction
 deinitAction = Deinit
 
-deinitMintedValue :: Value
-deinitMintedValue = singleton stakingCurrencySymbol stakingTokenName (-1)
+burnOriginNode :: Value
+burnOriginNode = singleton nodeCS originNodeTN (-1)
 
 deinitScriptContext :: ScriptContext
 deinitScriptContext =
   buildMinting' $
     mconcat
       [ input headUTXO
-      , mint deinitMintedValue
-      , withMinting stakingCurrencySymbol
+      , mint burnOriginNode
+      , withMinting nodeCS
       ]
 
 user1PKH :: BuiltinByteString
@@ -234,13 +162,19 @@ insertTokenName :: TokenName
 insertTokenName = "FSNe18d73505be6420225ed2a42c8e975e4c6f9148ab38e951ea2572e54"
 
 coveringMintedValue :: Value
-coveringMintedValue = singleton stakingCurrencySymbol coveringTokenName 1
+coveringMintedValue = singleton nodeCS coveringTokenName 1
+
+mkStakeValue :: Integer -> Value
+mkStakeValue = singleton stakeCS stakeTN 
+
+adaCommitment :: Integer
+adaCommitment = plift exactAdaCommitment
 
 coveringNodeValue :: Value
-coveringNodeValue = singleton "" "" 9_000_000 <> coveringMintedValue
+coveringNodeValue = singleton "" "" adaCommitment <> coveringMintedValue <> mkStakeValue 1500
 
 insertMintedValue :: Value
-insertMintedValue = singleton stakingCurrencySymbol insertTokenName 1
+insertMintedValue = singleton nodeCS insertTokenName 1
 
 coveringNode :: StakingSetNode
 coveringNode =
@@ -283,7 +217,7 @@ outputNodeUTXO :: UTXO
 outputNodeUTXO =
   mconcat
     [ address headAddr
-    , withValue (singleton "" "" 9_000_000 <> insertMintedValue)
+    , withValue (singleton "" "" adaCommitment <> insertMintedValue <> mkStakeValue 2000)
     , withInlineDatum outputNode
     ]
 
@@ -301,7 +235,7 @@ insertScriptContext =
       , output outputPrevNodeUTXO
       , output outputNodeUTXO
       , mint insertMintedValue
-      , withMinting stakingCurrencySymbol
+      , withMinting nodeCS
       , timeRange insertValidTimeRange
       , signedWith (PubKeyHash user2PKH)
       ]
@@ -335,7 +269,7 @@ removeNodeUTXO :: UTXO
 removeNodeUTXO =
   mconcat
     [ address headAddr
-    , withValue (singleton "" "" 9_000_000 <> insertMintedValue)
+    , withValue (singleton "" "" adaCommitment <> insertMintedValue <> mkStakeValue 2000)
     , withInlineDatum removeNode
     ]
 
@@ -361,7 +295,7 @@ removeTokenName :: TokenName
 removeTokenName = "FSNe18d73505be6420225ed2a42c8e975e4c6f9148ab38e951ea2572e54"
 
 removeMintedValue :: Value
-removeMintedValue = singleton stakingCurrencySymbol removeTokenName (-1)
+removeMintedValue = singleton nodeCS removeTokenName (-1)
 
 removeScriptContext :: ScriptContext
 removeScriptContext =
@@ -371,19 +305,19 @@ removeScriptContext =
       , input removeNodeUTXO
       , output rmOutputNodeUTXO
       , mint removeMintedValue
-      , withMinting stakingCurrencySymbol
+      , withMinting nodeCS
       , timeRange removeValidTimeRange
       , signedWith (PubKeyHash user2PKH)
       ]
 
 removeValidLateTimeRange :: POSIXTimeRange
-removeValidLateTimeRange = Interval (Interval.lowerBound 1_000) (Interval.strictUpperBound 60_000_000)
+removeValidLateTimeRange = Interval (Interval.lowerBound 1_000) (Interval.strictUpperBound 100_000_000)
 
 penaltyOutputUTXO :: UTXO
 penaltyOutputUTXO =
   mconcat
     [ address penaltyAddress
-    , withValue (singleton "" "" 2_250_000)
+    , withValue (mkStakeValue 500 <> singleton "" "" 2_000_000)
     ]
 
 lateRemoveScriptContext :: ScriptContext
@@ -395,7 +329,7 @@ lateRemoveScriptContext =
       , output rmOutputNodeUTXO
       , output penaltyOutputUTXO
       , mint removeMintedValue
-      , withMinting stakingCurrencySymbol
+      , withMinting nodeCS
       , timeRange removeValidLateTimeRange
       , signedWith (PubKeyHash user2PKH)
       ]
