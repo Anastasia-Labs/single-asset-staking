@@ -36,7 +36,7 @@ import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import Types.Constants (exactAdaCommitment, pnodeKeyTN, poriginNodeTN, pparseNodeKey, nodeAda)
+import Types.Constants (exactAdaCommitment, nodeAda, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
 import Types.StakingSet (
   PNodeKey (..),
   PStakingConfig,
@@ -112,7 +112,7 @@ parseNodeOutputUtxo = phoistAcyclic $
     -- Prevents TokenDust attack
     passert "All FSN tokens from node policy" $
       pheadSingleton # (pfindCurrencySymbolsByTokenPrefix # value # pconstant "FSN") #== nodeCS
-    passert "Insufficient stake" $ 
+    passert "Insufficient stake" $
       pvalueOf # value # configF.stakeCS # configF.stakeTN #>= configF.minimumStake
     passert "Too many assets" $ pcountOfUniqueTokens # value #== 3
     passert "Incorrect number of nodeTokens" $ amount #== 1
@@ -313,8 +313,7 @@ pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
   configF <- pletFields @'["freezeStake", "penaltyAddress", "stakeCS", "stakeTN"] config
 
   let ownInputStake = pvalueOf # removedValue # configF.stakeCS # configF.stakeTN
-      ownInputFee = pdivideCeil # ownInputStake # 4 -- Penalty fee is 25% of stake 
-
+      ownInputFee = pdivideCeil # ownInputStake # 4 -- Penalty fee is 25% of stake
   let finalCheck =
         -- check if user is unstaking before or after freezeStake
         ( pif
@@ -323,9 +322,14 @@ pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
             ( pany
                 # plam
                   ( \out ->
-                      pfield @"address" # out #== configF.penaltyAddress
-                      #&& ownInputFee #<= pvalueOf
-                        # (pfield @"value" # out) # configF.stakeCS # configF.stakeTN
+                      pfield @"address"
+                        # out
+                        #== configF.penaltyAddress
+                        #&& ownInputFee
+                        #<= pvalueOf
+                        # (pfield @"value" # out)
+                        # configF.stakeCS
+                        # configF.stakeTN
                   )
                 # outs -- must pay 25% penalty fee
             )
@@ -356,7 +360,7 @@ pClaim common sigs = plam $ \pkToRemove -> P.do
 
   passert "Incorrect signature" (pelem # pkToRemove # sigs)
 
-  {- 
+  {-
     Verify that this node has been processed by the rewards fold.
     This cannot be accomplished by checking count of unique tokens in the node,
     as it would fail in the scenario when stake token is same as reward token.

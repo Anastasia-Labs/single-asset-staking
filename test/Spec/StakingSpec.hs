@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Spec.StakingSpec (unitTest) where
 
 import Plutarch.Context (
@@ -38,14 +39,14 @@ import PlutusLedgerApi.V2 (
 import PlutusTx qualified
 import Test.Tasty (TestTree)
 
-import Plutarch.Prelude
-import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 import Mint.Standard (mkStakingNodeMPW)
-import Types.Constants (poriginNodeTN, exactAdaCommitment)
+import Plutarch.Prelude
+import Types.Constants (exactAdaCommitment, poriginNodeTN)
+import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 
-import Types.StakingSet (PStakingNodeAction (..))
 import Conversions (pconvert)
 import Plutarch.Api.V2 (PMintingPolicy)
+import Types.StakingSet (PStakingNodeAction (..))
 
 nodeCS :: CurrencySymbol
 nodeCS = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b79a4"
@@ -165,7 +166,7 @@ coveringMintedValue :: Value
 coveringMintedValue = singleton nodeCS coveringTokenName 1
 
 mkStakeValue :: Integer -> Value
-mkStakeValue = singleton stakeCS stakeTN 
+mkStakeValue = singleton stakeCS stakeTN
 
 adaCommitment :: Integer
 adaCommitment = plift exactAdaCommitment

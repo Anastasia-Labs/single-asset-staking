@@ -1,5 +1,6 @@
 module Main (main) where
 
+import AlwaysFails (pAlwaysFails, pAuthMint)
 import Cardano.Binary qualified as CBOR
 import Data.Aeson (KeyValue ((.=)), object)
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -29,13 +30,12 @@ import PlutusLedgerApi.V2 (
   Data,
   ExBudget,
  )
+import RewardTokenHolder (pmintRewardTokenHolder, prewardTokenHolder)
+import Types.Constants (psetNodePrefix)
 import Validator (pDiscoverGlobalLogicW, pStakingSetValidator)
-import AlwaysFails (pAlwaysFails, pAuthMint)
-import RewardTokenHolder (prewardTokenHolder, pmintRewardTokenHolder)
 import "liqwid-plutarch-extra" Plutarch.Extra.Script (
   applyArguments,
  )
-import Types.Constants (psetNodePrefix)
 
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript

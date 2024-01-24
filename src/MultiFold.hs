@@ -5,8 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW) where 
+module MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW) where
 
+import Conversions (pconvert)
 import Plutarch.Api.V1 (PCredential (..))
 import Plutarch.Api.V1.Value (padaSymbol, padaToken, pforgetPositive, pnoAdaValue, pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as Value
@@ -31,7 +32,7 @@ import Plutarch.Extra.Interval (pbefore)
 import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
 import Plutarch.Prelude
 import Types.Classes
-import Types.Constants (commitFoldTN, foldingFee, poriginNodeTN, rewardTokenHolderTN, rewardFoldTN)
+import Types.Constants (commitFoldTN, foldingFee, poriginNodeTN, rewardFoldTN, rewardTokenHolderTN)
 import Types.StakingSet
 import Utils (
   pand'List,
@@ -53,7 +54,6 @@ import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletFieldsC,
   pmatchC,
  )
-import Conversions (pconvert)
 
 data PFoldMintConfig (s :: S)
   = PFoldMintConfig
@@ -505,12 +505,12 @@ prewardSuccessor ::
   Term s PTxOut ->
   Term s PRewardsFoldState
 prewardSuccessor config totalRewardTokens totalStaked state inputNode outputNode = unTermCont $ do
-  configF <- pletFieldsC @'["nodeCS", "rewardTN", "rewardCS", "stakeCS" , "stakeTN"] config
+  configF <- pletFieldsC @'["nodeCS", "rewardTN", "rewardCS", "stakeCS", "stakeTN"] config
   accNodeF <- pmatchC state
   nodeInputF <- pletFieldsC @'["address", "value", "datum"] inputNode
   inputValue <- pletC $ pforgetPositive nodeInputF.value
   (POutputDatum nodeInpDatum) <- pmatchC nodeInputF.datum
-  let nodeInpDat = pfromPDatum @PStakingSetNode #(pfield @"outputDatum" # nodeInpDatum)
+  let nodeInpDat = pfromPDatum @PStakingSetNode # (pfield @"outputDatum" # nodeInpDatum)
   nodeInDatF <- pletFieldsC @'["key", "next"] nodeInpDat
 
   nodeStake <- pletC $ pvalueOf # inputValue # configF.stakeCS # configF.stakeTN
@@ -539,7 +539,7 @@ prewardSuccessor config totalRewardTokens totalStaked state inputNode outputNode
             , owedRewardTkns = accNodeF.owedRewardTkns + owedRewardTokens
             , foldCount = accNodeF.foldCount + 1
             }
-            
+
   pure $ pif successorChecks accState perror
 
 pfoldCorrespondingUTxOs ::
@@ -597,7 +597,7 @@ prewardFoldNodes ::
         :--> POpaque
     )
 prewardFoldNodes = phoistAcyclic $ plam $ \rewardConfig inputIdxs outputIdxs dat ctx -> unTermCont $ do
-  rewardConfigF <- pletFieldsC @'["nodeCS", "rewardTN", "rewardCS", "stakeCS" , "stakeTN"] rewardConfig
+  rewardConfigF <- pletFieldsC @'["nodeCS", "rewardTN", "rewardCS", "stakeCS", "stakeTN"] rewardConfig
   ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
   info <- pletFieldsC @'["inputs", "outputs", "referenceInputs", "mint"] ctxF.txInfo
   txIns <- pletC $ pfromData info.inputs
@@ -637,7 +637,7 @@ prewardFoldNodes = phoistAcyclic $ plam $ \rewardConfig inputIdxs outputIdxs dat
 
   newRewardsFoldState <- pmatchC $ pfoldCorrespondingUTxOs rewardConfig totalRewardTokens totalStake rewardsFoldState nodeInputs nodeOutputs
   let owedRewardTknsValue = Value.psingleton # rewardConfigF.rewardCS # rewardConfigF.rewardTN # (-newRewardsFoldState.owedRewardTkns)
-  
+
   let foldChecks =
         pand'List
           [ newFoldNodeF.key #== currFoldNodeF.key
@@ -654,7 +654,7 @@ prewardFoldNodes = phoistAcyclic $ plam $ \rewardConfig inputIdxs outputIdxs dat
 prewardFoldNode :: Term s (PRewardFoldConfig :--> PRewardFoldDatum :--> PScriptContext :--> POpaque)
 prewardFoldNode = phoistAcyclic $
   plam $ \rewardConfig dat ctx -> unTermCont $ do
-    rewardConfigF <- pletFieldsC @'["nodeCS", "rewardTN", "rewardCS", "stakeCS" , "stakeTN"] rewardConfig
+    rewardConfigF <- pletFieldsC @'["nodeCS", "rewardTN", "rewardCS", "stakeCS", "stakeTN"] rewardConfig
     ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
     info <- pletFieldsC @'["inputs", "outputs", "referenceInputs", "mint"] ctxF.txInfo
 
@@ -693,7 +693,7 @@ prewardFoldNode = phoistAcyclic $
 
     let nodeOutput = ptryOutputToAddress # txOuts # nodeInputF.address
     nodeOutputF <- pletFieldsC @'["value"] nodeOutput
-    
+
     mkRewardValue <- pletC $ Value.psingleton # rewardConfigF.rewardCS # rewardConfigF.rewardTN
     mkAdaValue <- pletC $ Value.psingleton # padaSymbol # padaToken
     distributedValue <- pletC $ mkRewardValue # (-owedRewardTkns)
@@ -702,7 +702,7 @@ prewardFoldNode = phoistAcyclic $
 
     let correctOwnOutput = (pforgetPositive ownInputF.value) <> distributedValue
         correctNodeOutput = (pforgetPositive nodeInputValue <> posDistributedValue) <> collectedAdaValue
-        
+
     let foldChecks =
           pand'List
             [ currFoldNodeF.next #== nodeInpDatF.key

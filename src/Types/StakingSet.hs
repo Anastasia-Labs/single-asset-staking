@@ -40,7 +40,8 @@ import Plutarch.Api.V2 (
   PPubKeyHash (PPubKeyHash),
   PScriptHash (..),
   PStakingCredential (..),
-  PTxOutRef, PTokenName,
+  PTokenName,
+  PTxOutRef,
  )
 import Plutarch.DataRepr (
   DerivePConstantViaData (DerivePConstantViaData),
@@ -49,7 +50,7 @@ import Plutarch.DataRepr (
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (Address, BuiltinByteString, POSIXTime, PubKeyHash, TxOutRef, CurrencySymbol, TokenName)
+import PlutusLedgerApi.V2 (Address, BuiltinByteString, CurrencySymbol, POSIXTime, PubKeyHash, TokenName, TxOutRef)
 import PlutusTx qualified
 import Types.Classes
 
@@ -240,7 +241,6 @@ deriving via
   (DerivePConstantViaData StakingSetNode PStakingSetNode)
   instance
     PConstantDecl StakingSetNode
-
 
 instance ScottConvertible PStakingSetNode where
   type ScottOf PStakingSetNode = PStakingSetNodeState

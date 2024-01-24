@@ -12,7 +12,8 @@ import Data.ByteString (ByteString)
 
 import Conversions
 import Plutarch.Api.V1 (
-  PCredential (..), PPubKeyHash (PPubKeyHash),
+  PCredential (..),
+  PPubKeyHash (PPubKeyHash),
  )
 import Plutarch.Api.V1.AssocMap qualified as AssocMap
 import Plutarch.Api.V1.Value (pvalueOf)
@@ -27,8 +28,8 @@ import Plutarch.Extra.Interval (pafter)
 import Plutarch.Extra.ScriptContext (pfromPDatum)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import Types.StakingSet (PNodeValidatorAction (..), PStakingLaunchConfig (..), PStakingSetNode (..), PNodeKey(..))
-import Utils (passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, phasCS, ptryOwnInput, ptryOwnOutput, pfilterCSFromValue, (#>=))
+import Types.StakingSet (PNodeKey (..), PNodeValidatorAction (..), PStakingLaunchConfig (..), PStakingSetNode (..))
+import Utils (passert, pcontainsCurrencySymbols, pfilterCSFromValue, pfindCurrencySymbolsByTokenPrefix, phasCS, ptryOwnInput, ptryOwnOutput, (#>=))
 
 pDiscoverGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PStakeValidator)
 pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardFoldCS' _redeemer ctx -> P.do
@@ -54,7 +55,6 @@ pStakingSetValidator prefix = plam $ \config dat red ctx' ->
            in pmatch (AssocMap.plookup # stakeScript # stakeCerts) $ \case
                 PJust _ -> (popaque $ pconstant ())
                 PNothing -> perror
-
         otherRedeemers -> P.do
           ctx <- pletFields @'["txInfo", "purpose"] ctx'
           info <- pletFields @'["inputs", "outputs", "mint", "validRange", "signatories"] ctx.txInfo
@@ -77,16 +77,15 @@ pStakingSetValidator prefix = plam $ \config dat red ctx' ->
                 "Must mint/burn for any StakingSet input"
                 (pcontainsCurrencySymbols # pfromData info.mint # potentialNodeCSs)
               (popaque $ pconstant ())
-
             PModifyStake _ -> P.do
               PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-              configF <- pletFields @'["freezeStake", "stakeCS", "stakeTN", "minimumStake"] config 
+              configF <- pletFields @'["freezeStake", "stakeCS", "stakeTN", "minimumStake"] config
               PKey ((pfield @"_0" #) -> ownerHash) <- pmatch (pfield @"key" # oldDatum)
 
               let ownOutput = ptryOwnOutput # info.outputs # ownValHash
               ownOutputF <- pletFields @'["value", "datum"] ownOutput
               POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum
-            
+
               let
                 newDatum = pfromPDatum @PStakingSetNode # ownOutputDatum
                 newStake = pvalueOf # ownOutputF.value # configF.stakeCS # configF.stakeTN
