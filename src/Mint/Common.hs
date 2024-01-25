@@ -314,25 +314,22 @@ pRemove common vrange config outs sigs = plam $ \pkToRemove node -> P.do
 
   let ownInputStake = pvalueOf # removedValue # configF.stakeCS # configF.stakeTN
       ownInputFee = pdivideCeil # ownInputStake # 4 -- Penalty fee is 25% of stake
+      penaltyFeePaid = plam $ \out ->
+        pfield @"address"
+          # out
+          #== configF.penaltyAddress
+          #&& ownInputFee
+          #<= pvalueOf
+          # (pfield @"value" # out)
+          # configF.stakeCS
+          # configF.stakeTN
+
   let finalCheck =
         -- check if user is unstaking before or after freezeStake
         ( pif
             (pafter # configF.freezeStake # vrange) -- user unstaking before stake is frozen
             (pconstant True)
-            ( pany
-                # plam
-                  ( \out ->
-                      pfield @"address"
-                        # out
-                        #== configF.penaltyAddress
-                        #&& ownInputFee
-                        #<= pvalueOf
-                        # (pfield @"value" # out)
-                        # configF.stakeCS
-                        # configF.stakeTN
-                  )
-                # outs -- must pay 25% penalty fee
-            )
+            (pany # penaltyFeePaid # outs) -- must pay 25% penalty fee
         )
 
   passert "Removal broke Phase Rules." finalCheck
