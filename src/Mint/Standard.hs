@@ -1,6 +1,4 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Mint.Standard (
   mkStakingNodeMP,
@@ -10,12 +8,10 @@ module Mint.Standard (
 import Plutarch.Api.V2 (
   PMintingPolicy,
   PScriptContext,
-  PTxOutRef,
  )
 import Plutarch.Extra.Interval (pafter, pbefore)
 
 import Mint.Common (
-  PStakingCommon (mint, ownCS),
   makeCommon,
   pClaim,
   pDeinit,
@@ -26,16 +22,15 @@ import Mint.Common (
 import Mint.Helpers (
   hasUtxoWithRef,
  )
-import Plutarch.Internal (Config (..))
 import Plutarch.Monadic qualified as P
-import Plutarch.Unsafe (punsafeCoerce)
 
+import Conversions (pconvert)
 import Plutarch.Prelude
 import Types.StakingSet (PStakingConfig (..), PStakingNodeAction (..))
 import Utils (pand'List, passert, pcond)
 
 --------------------------------
--- FinSet Node Minting Policy:
+-- Staking Node Minting Policy
 --------------------------------
 
 mkStakingNodeMP ::
@@ -45,12 +40,12 @@ mkStakingNodeMP ::
         :--> PScriptContext
         :--> PUnit
     )
-mkStakingNodeMP = plam $ \discConfig redm ctx -> P.do
-  configF <- pletFields @'["initUTxO"] discConfig
+mkStakingNodeMP = plam $ \config redm ctx -> P.do
+  configF <- pletFields @'["initUTxO", "freezeStake", "endStaking"] config
 
   (common, inputs, outs, sigs, vrange) <-
     runTermCont $
-      makeCommon ctx
+      makeCommon config ctx
 
   pmatch redm $ \case
     PInit _ -> P.do
@@ -64,17 +59,18 @@ mkStakingNodeMP = plam $ \discConfig redm ctx -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action
       let insertChecks =
             pand'List
-              [ pafter # (pfield @"stakingDeadline" # discConfig) # vrange
+              [ pafter # configF.freezeStake # vrange
               , pelem # act.keyToInsert # sigs
               ]
       pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) perror
     PRemove action -> P.do
-      configF <- pletFields @'["stakingDeadline"] discConfig
       act <- pletFields @'["keyToRemove", "coveringNode"] action
-      discDeadline <- plet configF.stakingDeadline
       pcond
-        [ ((pbefore # discDeadline # vrange), (pClaim common outs sigs # act.keyToRemove))
-        , ((pafter # discDeadline # vrange), (pRemove common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode))
+        [ ((pbefore # configF.endStaking # vrange), (pClaim common sigs # act.keyToRemove))
+        ,
+          ( (pafter # configF.endStaking # vrange)
+          , (pRemove common vrange config outs sigs # act.keyToRemove # act.coveringNode)
+          )
         ]
         perror
 
@@ -83,6 +79,6 @@ mkStakingNodeMPW ::
     ( PStakingConfig
         :--> PMintingPolicy
     )
-mkStakingNodeMPW = phoistAcyclic $ plam $ \discConfig redm ctx ->
-  let red = punsafeCoerce @_ @_ @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP # discConfig # red # ctx
+mkStakingNodeMPW = phoistAcyclic $ plam $ \config redm ctx ->
+  let red = pconvert @PStakingNodeAction redm
+   in popaque $ mkStakingNodeMP # config # red # ctx

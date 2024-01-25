@@ -146,10 +146,12 @@ common test-dependencies
 library
   import:          lang, dependencies
   exposed-modules:
+    AlwaysFails
     Mint.Common
     Mint.Helpers
     Mint.Standard
     MultiFold
+    RewardTokenHolder
     Types.Classes
     Types.Constants
     Types.StakingSet
@@ -171,7 +173,11 @@ test-suite single-asset-staking-test
   build-depends:  single-asset-staking
   main-is:        Spec.hs
   hs-source-dirs: test
-  other-modules:  Spec.StakingSpec
+  other-modules:
+    Conversions
+    Spec.StakingSpec
+
+  hs-source-dirs: src-optimized
 
 executable single-asset-staking
   import:         lang, dependencies

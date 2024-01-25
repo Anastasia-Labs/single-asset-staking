@@ -17,3 +17,4 @@ dist-newstyle/
 # Env
 
 .direnv
+shell.nix

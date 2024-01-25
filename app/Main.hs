@@ -1,8 +1,6 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
-
 module Main (main) where
 
+import AlwaysFails (pAlwaysFails, pAuthMint)
 import Cardano.Binary qualified as CBOR
 import Data.Aeson (KeyValue ((.=)), object)
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -11,7 +9,6 @@ import Data.Bifunctor (
  )
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Lazy qualified as LBS
-import Data.Default (def)
 import Data.Text (
   Text,
   pack,
@@ -21,7 +18,7 @@ import Mint.Standard (mkStakingNodeMPW)
 import MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW)
 import Plutarch (
   Config (Config),
-  TracingMode (DoTracing, NoTracing),
+  TracingMode (NoTracing),
   compile,
  )
 import Plutarch.Evaluate (
@@ -33,10 +30,8 @@ import PlutusLedgerApi.V2 (
   Data,
   ExBudget,
  )
-import Ply.Plutarch (
-  writeTypedScript,
- )
-import System.IO
+import RewardTokenHolder (pmintRewardTokenHolder, prewardTokenHolder)
+import Types.Constants (psetNodePrefix)
 import Validator (pDiscoverGlobalLogicW, pStakingSetValidator)
 import "liqwid-plutarch-extra" Plutarch.Extra.Script (
   applyArguments,
@@ -70,9 +65,13 @@ main :: IO ()
 main = do
   putStrLn "Exporting Single Asset Staking Scripts"
   writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/stakingStakeValidator.json" pDiscoverGlobalLogicW
-  writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator def "FSN"
-  writePlutusScript "Single Asset Staking Mint" "./compiled/stakingMinting.json" $ mkStakingNodeMPW
+  writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator $ plift psetNodePrefix
+  writePlutusScript "Single Asset Staking - Minting Validator" "./compiled/stakingMint.json" $ mkStakingNodeMPW
   writePlutusScript "Commit Fold Validator" "./compiled/foldValidator.json" pfoldValidatorW
   writePlutusScript "Commit Fold Mint" "./compiled/foldMint.json" pmintFoldPolicyW
   writePlutusScript "Reward Fold Validator" "./compiled/rewardFoldValidator.json" prewardFoldValidatorW
   writePlutusScript "Reward Fold Mint" "./compiled/rewardFoldMint.json" pmintRewardFoldPolicyW
+  writePlutusScript "Token Holder Validator" "./compiled/tokenHolderValidator.json" prewardTokenHolder
+  writePlutusScript "Token Holder Policy" "./compiled/tokenHolderPolicy.json" pmintRewardTokenHolder
+  writePlutusScript "Always Fails" "./compiled/alwaysFails.json" pAlwaysFails
+  writePlutusScript "Auth Mint" "./compiled/authMint.json" pAuthMint

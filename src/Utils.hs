@@ -1,16 +1,13 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Utils where
 
 import Data.Text qualified as T
-import Plutarch.Api.V1 (AmountGuarantees (Positive), KeyGuarantees (Sorted), PCredential (PPubKeyCredential, PScriptCredential))
-import Plutarch.Api.V1.AssocMap qualified as AssocMap
+import Plutarch.Api.V1 (AmountGuarantees (..), KeyGuarantees (Sorted), PCredential (PPubKeyCredential, PScriptCredential))
 import Plutarch.Api.V1.Scripts (PScriptHash)
 import Plutarch.Api.V1.Value (padaSymbol, pnormalize, pvalueOf)
 
-import Plutarch.Api.V1 (AmountGuarantees (..))
 import Plutarch.Api.V1.Value qualified as Value
 import Plutarch.Api.V2 (
   PAddress,
@@ -25,7 +22,67 @@ import Plutarch.Api.V2 (
  )
 import Plutarch.Bool (pand')
 import Plutarch.Monadic qualified as P
-import Plutarch.Prelude
+import Plutarch.Prelude (
+  ClosedTerm,
+  DerivePlutusType (..),
+  Generic,
+  PAsData,
+  PBool (..),
+  PBuiltinList,
+  PBuiltinPair,
+  PByteString,
+  PEq (..),
+  PInteger,
+  PIsListLike,
+  PListLike (..),
+  PMaybe (..),
+  POrd,
+  PPair (..),
+  PPartialOrd ((#<), (#<=)),
+  PShow,
+  PType,
+  PlutusType,
+  PlutusTypeScott,
+  S,
+  Term,
+  TermCont,
+  pall,
+  pany,
+  pcon,
+  pconcat,
+  pconstant,
+  pdata,
+  pelem,
+  perror,
+  pfield,
+  pfilter,
+  pfix,
+  pfoldl,
+  pfoldr,
+  pfromData,
+  pfstBuiltin,
+  phoistAcyclic,
+  pif,
+  plam,
+  plength,
+  plengthBS,
+  plet,
+  pletFields,
+  pmap,
+  pmatch,
+  pnot,
+  precList,
+  psliceBS,
+  psndBuiltin,
+  pto,
+  ptraceError,
+  tcont,
+  unTermCont,
+  (#),
+  (#$),
+  (#&&),
+  type (:-->),
+ )
 import "liqwid-plutarch-extra" Plutarch.Extra.List (plookupAssoc)
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
 

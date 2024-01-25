@@ -10,10 +10,10 @@ import Plutarch.Prelude
 import PlutusLedgerApi.V1 (TokenName)
 import Utils (passert, pisPrefixOf)
 
-projectTokenHolderTN :: Term s PTokenName
-projectTokenHolderTN =
+rewardTokenHolderTN :: Term s PTokenName
+rewardTokenHolderTN =
   let tn :: TokenName
-      tn = "PTHolder"
+      tn = "RTHolder"
    in pconstant tn
 
 commitFoldTN :: Term s PTokenName
@@ -66,5 +66,5 @@ minAda = pconstant 2_000_000
 nodeAda :: Term s PInteger
 nodeAda = pconstant 3_000_000
 
-minCommitment :: Term s PInteger
-minCommitment = pconstant 4_000_000
+exactAdaCommitment :: Term s PInteger
+exactAdaCommitment = pconstant 4_000_000
