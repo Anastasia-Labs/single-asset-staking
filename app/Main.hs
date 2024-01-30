@@ -1,6 +1,6 @@
 module Main (main) where
 
-import AlwaysFails (pAlwaysFails, pAuthMint)
+import AlwaysFails (pAlwaysFails)
 import Cardano.Binary qualified as CBOR
 import Data.Aeson (KeyValue ((.=)), object)
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -74,4 +74,3 @@ main = do
   writePlutusScript "Token Holder Validator" "./compiled/tokenHolderValidator.json" prewardTokenHolder
   writePlutusScript "Token Holder Policy" "./compiled/tokenHolderPolicy.json" pmintRewardTokenHolder
   writePlutusScript "Always Fails" "./compiled/alwaysFails.json" pAlwaysFails
-  writePlutusScript "Auth Mint" "./compiled/authMint.json" pAuthMint
