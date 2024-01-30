@@ -34,12 +34,6 @@ poriginNodeTN =
       tn = "FSN"
    in pconstant tn
 
-pcorrNodeTN :: Term s PTokenName
-pcorrNodeTN =
-  let tn :: TokenName
-      tn = "FCN"
-   in pconstant tn
-
 psetNodePrefix :: ClosedTerm PByteString
 psetNodePrefix = pconstant "FSN"
 

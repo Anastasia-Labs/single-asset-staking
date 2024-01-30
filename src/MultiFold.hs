@@ -24,7 +24,6 @@ import Plutarch.Api.V2 (
   PTxOut,
   PValidator,
  )
-import Plutarch.Bool (pand')
 import Plutarch.DataRepr (
   PDataFields,
  )
@@ -47,7 +46,7 @@ import Utils (
   ptryOwnInput,
   ptryOwnOutput,
   ptxSignedByPkh,
-  pvalueOfOneScott,
+  pvalueOfOneScott, (#/=),
  )
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletC,
@@ -262,8 +261,16 @@ pisSuccessor = plam $ \config accNode node -> unTermCont $ do
             { next = toScott (pfromData currNodeF.next)
             , staked = accNodeF.staked + (pvalueOf # nodeValue # configF.stakeCS # configF.stakeTN)
             }
+      finalChecks =
+        pand'List [
+          accNodeF.next #== nodeKey,
+          {- To prevent Repeated Fold Attack. Prevents folding again by checking that head node is not 
+             included in the fold again. CommitFoldDatum.currNode.key == PEmtpy -}
+          accNodeF.key #/= nodeKey,
+          hasNodeTk
+        ]
 
-  pure $ pif (pand' # (accNodeF.next #== nodeKey) # hasNodeTk) accState perror
+  pure $ pif finalChecks accState perror
 
 pfoldNodes :: Term s (PFoldConfig :--> PBuiltinList (PAsData PInteger) :--> PFoldDatum :--> PScriptContext :--> POpaque)
 pfoldNodes = phoistAcyclic $
@@ -673,6 +680,8 @@ prewardFoldNode = phoistAcyclic $
 
     let foldOutDatum = pfromPDatum @PRewardFoldDatum # (pfield @"outputDatum" # foldOutputDatum)
     foldOutDatumF <- pletFieldsC @'["currNode", "totalRewardTokens", "totalStaked", "owner"] foldOutDatum
+    newFoldNodeF <- pletFieldsC @'["key", "next"] foldOutDatumF.currNode
+
     oldTotalRewardTokens <- pletC datF.totalRewardTokens
     oldTotalStaked <- pletC datF.totalStaked
     nodeCSS <- pletC $ pfromData rewardConfigF.nodeCS
@@ -705,8 +714,9 @@ prewardFoldNode = phoistAcyclic $
 
     let foldChecks =
           pand'List
-            [ currFoldNodeF.next #== nodeInpDatF.key
-            , foldOutDatumF.currNode #== nodeInpDat
+            [ currFoldNodeF.key #== newFoldNodeF.key
+            , currFoldNodeF.next #== nodeInpDatF.key
+            , newFoldNodeF.next #== nodeInpDatF.next
             , foldOutDatumF.totalStaked #== oldTotalStaked
             , foldOutDatumF.totalRewardTokens #== oldTotalRewardTokens
             , foldOutDatumF.owner #== datF.owner
