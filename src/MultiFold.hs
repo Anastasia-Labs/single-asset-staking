@@ -46,7 +46,8 @@ import Utils (
   ptryOwnInput,
   ptryOwnOutput,
   ptxSignedByPkh,
-  pvalueOfOneScott, (#/=),
+  pvalueOfOneScott,
+  (#/=),
  )
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletC,
@@ -262,13 +263,13 @@ pisSuccessor = plam $ \config accNode node -> unTermCont $ do
             , staked = accNodeF.staked + (pvalueOf # nodeValue # configF.stakeCS # configF.stakeTN)
             }
       finalChecks =
-        pand'List [
-          accNodeF.next #== nodeKey,
-          {- To prevent Repeated Fold Attack. Prevents folding again by checking that head node is not 
-             included in the fold again. CommitFoldDatum.currNode.key == PEmtpy -}
-          accNodeF.key #/= nodeKey,
-          hasNodeTk
-        ]
+        pand'List
+          [ accNodeF.next #== nodeKey
+          , {- To prevent Repeated Fold Attack. Prevents folding again by checking that head node is not
+               included in the fold again. CommitFoldDatum.currNode.key == PEmtpy -}
+            accNodeF.key #/= nodeKey
+          , hasNodeTk
+          ]
 
   pure $ pif finalChecks accState perror
 
