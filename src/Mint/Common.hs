@@ -36,7 +36,7 @@ import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import Types.Constants (exactAdaCommitment, nodeAda, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.Constants (minAda, nodeAda, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
 import Types.StakingSet (
   PNodeKey (..),
   PStakingConfig,
@@ -118,8 +118,8 @@ parseNodeOutputUtxo = phoistAcyclic $
     passert "Incorrect number of nodeTokens" $ amount #== 1
     passert "node is not ordered" $ validNode # datum
     passert "Incorrect token name" $ nodeKey #== datumKey
-    passert "Must have exactly 4 ADA" $
-      plovelaceValueOf # value #== exactAdaCommitment
+    passert "Must have exactly 3 ADA" $
+      plovelaceValueOf # value #== nodeAda
     -- todo maxStakeCommitment?
     pcon (PPair value datum)
 
@@ -222,7 +222,6 @@ pDeinit common = P.do
   passert "Deinit must spend exactly one node" $ pnull # otherNodes
   -- Output Checks:
   passert "Deinit must not output nodes" $ pnull # common.nodeOutputs
-
   -- Mint checks:
   passert "Incorrect mint for DeInit" $
     correctNodeTokenMinted # common.ownCS # poriginNodeTN # (-1) # common.mint
@@ -340,8 +339,9 @@ pClaim ::
   forall (s :: S).
   PStakingCommon s ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
-  Term s (PAsData PPubKeyHash :--> PUnit)
-pClaim common sigs = plam $ \pkToRemove -> P.do
+  Term s (PAsData PPubKeyHash) ->
+  Term s PUnit
+pClaim common sigs pkToRemove = P.do
   keyToRemove <- plet . pto . pfromData $ pkToRemove
 
   -- Input Checks
@@ -349,8 +349,7 @@ pClaim common sigs = plam $ \pkToRemove -> P.do
 
   nodeToRemoveTN <- plet (pnodeKeyTN # keyToRemove)
 
-  passert "Incorrect node UTxO for Remove" $
-    pvalueOf # removedValue # common.ownCS # nodeToRemoveTN #== 1
+  passert "Incorrect node UTxO for Remove" $ pvalueOf # removedValue # common.ownCS # nodeToRemoveTN #== 1
 
   passert "Incorrect mint for Remove" $
     correctNodeTokenMinted # common.ownCS # nodeToRemoveTN # (-1) # common.mint
@@ -362,9 +361,9 @@ pClaim common sigs = plam $ \pkToRemove -> P.do
     This cannot be accomplished by checking count of unique tokens in the node,
     as it would fail in the scenario when stake token is same as reward token.
     Check if the node has paid folding fee to confirm it has undergone rewards fold.
-    exactAdaCommitment - foldingFee == nodeAda
+    nodeAda - foldingFee == minAda
   -}
-  passert "Claim broke phase rules" (plovelaceValueOf # removedValue #== nodeAda)
+  passert "Claim broke phase rules" (plovelaceValueOf # removedValue #== minAda)
 
   pconstant ()
 

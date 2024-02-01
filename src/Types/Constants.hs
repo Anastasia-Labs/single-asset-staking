@@ -59,6 +59,3 @@ minAda = pconstant 2_000_000
 
 nodeAda :: Term s PInteger
 nodeAda = pconstant 3_000_000
-
-exactAdaCommitment :: Term s PInteger
-exactAdaCommitment = pconstant 4_000_000

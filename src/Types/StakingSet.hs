@@ -60,7 +60,7 @@ data NodeValidatorAction
   | RewardFoldAct
   deriving stock (Generic, Show)
 
-PlutusTx.unstableMakeIsData ''NodeValidatorAction
+PlutusTx.makeIsDataIndexed ''NodeValidatorAction ([('LinkedListAct, 0), ('ModifyStake, 1), ('RewardFoldAct, 2)])
 
 data PNodeValidatorAction (s :: S)
   = PLinkedListAct (Term s (PDataRecord '[]))
@@ -137,14 +137,14 @@ deriving via (DerivePConstantViaData StakingConfig PStakingConfig) instance PCon
 
 data StakingNodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
-PlutusTx.unstableMakeIsData ''StakingNodeKey
+PlutusTx.makeIsDataIndexed ''StakingNodeKey ([('Key, 0), ('Empty, 1)])
 
 data StakingSetNode = MkSetNode
   { key :: StakingNodeKey
   , next :: StakingNodeKey
   }
   deriving stock (Show, Eq, Generic)
-PlutusTx.unstableMakeIsData ''StakingSetNode
+PlutusTx.makeIsDataIndexed ''StakingSetNode ([('MkSetNode, 0)])
 
 data SepNodeAction
   = SepInit
@@ -165,8 +165,9 @@ data StakingNodeAction
     Insert PubKeyHash StakingSetNode
   | -- | first arg is the key to remove, second arg is the covering node
     Remove PubKeyHash StakingSetNode
+  | Claim PubKeyHash
   deriving stock (Show, Eq, Generic)
-PlutusTx.unstableMakeIsData ''StakingNodeAction
+PlutusTx.makeIsDataIndexed ''StakingNodeAction ([('Init, 0), ('Deinit, 1), ('Insert, 2), ('Remove, 3), ('Claim, 4)])
 
 data PNodeKey (s :: S)
   = PKey (Term s (PDataRecord '["_0" ':= PByteString]))
@@ -294,6 +295,7 @@ data PStakingNodeAction (s :: S)
   | PDeinit (Term s (PDataRecord '[]))
   | PInsert (Term s (PDataRecord '["keyToInsert" ':= PPubKeyHash, "coveringNode" ':= PStakingSetNode]))
   | PRemove (Term s (PDataRecord '["keyToRemove" ':= PPubKeyHash, "coveringNode" ':= PStakingSetNode]))
+  | PClaim (Term s (PDataRecord '["keyToRemove" ':= PPubKeyHash]))
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PEq)
 

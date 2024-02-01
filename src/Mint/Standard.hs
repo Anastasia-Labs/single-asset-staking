@@ -27,7 +27,7 @@ import Plutarch.Monadic qualified as P
 import Conversions (pconvert)
 import Plutarch.Prelude
 import Types.StakingSet (PStakingConfig (..), PStakingNodeAction (..))
-import Utils (pand'List, passert, pcond)
+import Utils (pand'List, passert)
 
 --------------------------------
 -- Staking Node Minting Policy
@@ -65,14 +65,12 @@ mkStakingNodeMP = plam $ \config redm ctx -> P.do
       pif insertChecks (pInsert common # act.keyToInsert # act.coveringNode) perror
     PRemove action -> P.do
       act <- pletFields @'["keyToRemove", "coveringNode"] action
-      pcond
-        [ ((pbefore # configF.endStaking # vrange), (pClaim common sigs # act.keyToRemove))
-        ,
-          ( (pafter # configF.endStaking # vrange)
-          , (pRemove common vrange config outs sigs # act.keyToRemove # act.coveringNode)
-          )
-        ]
-        perror
+      passert "Cannot remove after endStaking" (pafter # configF.endStaking # vrange)
+      pRemove common vrange config outs sigs # act.keyToRemove # act.coveringNode
+    PClaim action -> P.do
+      act <- pletFields @'["keyToRemove"] action
+      passert "Cannot claim before endStaking" (pbefore # configF.endStaking # vrange)
+      pClaim common sigs act.keyToRemove
 
 mkStakingNodeMPW ::
   ClosedTerm
