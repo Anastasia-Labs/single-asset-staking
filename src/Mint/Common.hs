@@ -44,7 +44,8 @@ import Types.StakingSet (
   asPredecessorOf,
   asSuccessorOf,
   isEmptySet,
-  validNode, isNothing,
+  isNothing,
+  validNode,
  )
 import Utils (
   pand'List,

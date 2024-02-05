@@ -40,6 +40,7 @@ import Utils (
   pelemAt',
   pfindCurrencySymbolsByTokenName,
   pfoldl2,
+  phasCS,
   pheadSingleton,
   ptryLookupValue,
   ptryOutputToAddress,
@@ -47,7 +48,7 @@ import Utils (
   ptryOwnOutput,
   ptxSignedByPkh,
   pvalueOfOneScott,
-  (#/=), phasCS,
+  (#/=),
  )
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletC,
@@ -429,22 +430,22 @@ instance PTryFrom PData (PAsData PRewardFoldMintAct)
 pmintRewardFoldPolicyW :: Term s (PRewardMintFoldConfig :--> PMintingPolicy)
 pmintRewardFoldPolicyW = phoistAcyclic $ plam $ \rewardConfig red' ctx ->
   let red = pconvert @PRewardFoldMintAct red'
-  in pmatch red $ \case
-    PMintRewardFold _ -> popaque $ pmintRewardFold # rewardConfig # ctx
-    PBurnRewardFold _ -> popaque $ pburnRewardFold # ctx
+   in pmatch red $ \case
+        PMintRewardFold _ -> popaque $ pmintRewardFold # rewardConfig # ctx
+        PBurnRewardFold _ -> popaque $ pburnRewardFold # ctx
 
 pburnRewardFold :: Term s (PScriptContext :--> PUnit)
 pburnRewardFold = phoistAcyclic $ plam $ \ctx -> unTermCont $ do
-    contextFields <- pletFieldsC @'["txInfo", "purpose"] ctx
-    PMinting policy <- pmatchC contextFields.purpose
-    ownPolicyId <- pletC $ pfield @"_0" # policy
+  contextFields <- pletFieldsC @'["txInfo", "purpose"] ctx
+  PMinting policy <- pmatchC contextFields.purpose
+  ownPolicyId <- pletC $ pfield @"_0" # policy
 
-    info <- pletFieldsC @'["mint"] contextFields.txInfo
-    tkPairs <- pletC $ ptryLookupValue # ownPolicyId # (pnormalize # info.mint)
-    tkPair <- pletC (pheadSingleton # tkPairs)
-    let numMinted = psndBuiltin # tkPair
-    pure $
-      pif (pfromData numMinted #== -1) (pconstant ()) perror
+  info <- pletFieldsC @'["mint"] contextFields.txInfo
+  tkPairs <- pletC $ ptryLookupValue # ownPolicyId # (pnormalize # info.mint)
+  tkPair <- pletC (pheadSingleton # tkPairs)
+  let numMinted = psndBuiltin # tkPair
+  pure $
+    pif (pfromData numMinted #== -1) (pconstant ()) perror
 
 pmintRewardFold :: Term s (PRewardMintFoldConfig :--> PScriptContext :--> PUnit)
 pmintRewardFold = phoistAcyclic $
@@ -475,7 +476,7 @@ pmintRewardFold = phoistAcyclic $
                   # plam (\inp -> pvalueOf # (pfield @"value" # (pfield @"resolved" # inp)) # rewardConfigF.tokenHolderCS # rewardTokenHolderTN #== 1)
                   # info.inputs
               )
-        {- 'pheadSingleton' ensures that only one node input is being spent (it throws an error if 
+        {- 'pheadSingleton' ensures that only one node input is being spent (it throws an error if
             there is more than one element in the list). This node is confimed to be a head node by
             comparing its value to nodeOutput which has nodeCS.poriginNodeTN
         -}
@@ -487,7 +488,7 @@ pmintRewardFold = phoistAcyclic $
                   # info.inputs
               )
         nodeOutput =
-            pheadSingleton
+          pheadSingleton
             # ( pfilter @PBuiltinList
                   # plam (\out -> pvalueOf # (pfield @"value" # out) # rewardConfigF.nodeCS # poriginNodeTN #== 1)
                   # info.outputs
@@ -536,8 +537,8 @@ pmintRewardFold = phoistAcyclic $
             , pvalueOf # mintedValue # rewardConfigF.tokenHolderCS # rewardTokenHolderTN #== -1
             , nodeInpDat #== nodeOutDat
             , nodeInputF.address #== nodeOutputF.address
-            -- Taking folding fee from head node as an indicator that rewards fold has been initiated
-            , pforgetPositive nodeInputF.value <> foldingFeeVal #== pforgetPositive nodeOutputF.value
+            , -- Taking folding fee from head node as an indicator that rewards fold has been initiated
+              pforgetPositive nodeInputF.value <> foldingFeeVal #== pforgetPositive nodeOutputF.value
             ]
     pure $
       pif
@@ -650,11 +651,11 @@ prewardFoldValidatorW = phoistAcyclic $
             mintedValue <- pletC $ (pnormalize # infoF.mint)
             pure $
               pif
-                (pand'List 
-                  [ signedByOwner
-                  , atEnd
-                  , pvalueOf # mintedValue # pfromData rewardFoldCS # rewardFoldTN #== -1
-                  ]
+                ( pand'List
+                    [ signedByOwner
+                    , atEnd
+                    , pvalueOf # mintedValue # pfromData rewardFoldCS # rewardFoldTN #== -1
+                    ]
                 )
                 (popaque $ pconstant ())
                 perror
