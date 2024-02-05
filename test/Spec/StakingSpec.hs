@@ -150,11 +150,23 @@ deinitAction = Deinit
 burnOriginNode :: Value
 burnOriginNode = singleton nodeCS originNodeTN (-1)
 
+headUTXOAfterRFold :: UTXO
+headUTXOAfterRFold =
+  mconcat
+    [ address headAddr
+    , withValue (singleton "" "" (plift minAda) <> mintOriginNode <> mkStakeValue minimumStake)
+    , withInlineDatum $
+        MkSetNode
+          { key = Empty
+          , next = Key user1PKH
+          }
+    ]
+
 deinitScriptContext :: ScriptContext
 deinitScriptContext =
   buildMinting' $
     mconcat
-      [ input headUTXO
+      [ input headUTXOAfterRFold
       , mint burnOriginNode
       , withMinting nodeCS
       ]

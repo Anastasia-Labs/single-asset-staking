@@ -53,7 +53,6 @@ mkStakingNodeMP = plam $ \config redm ctx -> P.do
         hasUtxoWithRef # configF.initUTxO # inputs
       pInit common
     PDeinit _ ->
-      -- TODO deinit must check that reward fold has been completed
       pDeinit common
     PInsert action -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action

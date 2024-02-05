@@ -44,7 +44,7 @@ import Types.StakingSet (
   asPredecessorOf,
   asSuccessorOf,
   isEmptySet,
-  validNode,
+  validNode, isNothing,
  )
 import Utils (
   pand'List,
@@ -211,15 +211,23 @@ pInit common = P.do
 
   pconstant ()
 
--- TODO add deadline check
 pDeinit :: forall s. PStakingCommon s -> Term s PUnit
 pDeinit common = P.do
   -- Input Checks
   -- The following commented code should be used instead for protocols where node removal
   -- needs to preserve the integrity of the linked list.
-  PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isEmptySet # dat)) # common.nodeInputs
-  -- PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isNothing # (pfield @"key" # dat))) # common.nodeInputs
+  -- PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isEmptySet # dat)) # common.nodeInputs
+  PPair headNode otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isNothing # (pfield @"key" # dat))) # common.nodeInputs
   passert "Deinit must spend exactly one node" $ pnull # otherNodes
+
+  PPair nodeValue _ <- pmatch headNode
+  {- Folding fee taken from head node during Reward Fold Init. nodeAda - foldingFee = minAda
+     Once reward fold has started head node is not required. Claim can be processed for a node
+     after it has undergone rewards fold (with the same minAda check) without any need to preserve
+     integrity of the linked list (i.e without modifying the covering node).
+  -}
+  passert "Rewards fold has not started yet" $ plovelaceValueOf # nodeValue #== minAda
+
   -- Output Checks:
   passert "Deinit must not output nodes" $ pnull # common.nodeOutputs
   -- Mint checks:
