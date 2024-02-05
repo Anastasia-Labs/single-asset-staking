@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Spec.StakingSpec (unitTest) where
 
 import Plutarch.Context (
