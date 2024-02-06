@@ -35,9 +35,11 @@ pDiscoverGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PStakeValidator)
 pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardFoldCS' _redeemer ctx -> P.do
   -- let rewardsIdx = pconvert @(PAsData PInteger) redeemer
   ctxF <- pletFields @'["txInfo"] ctx
-  infoF <- pletFields @'["inputs"] ctxF.txInfo
+  infoF <- pletFields @'["outputs"] ctxF.txInfo
   rewardFoldCS <- plet $ pfromData rewardFoldCS'
-  let hasFoldToken = pany @PBuiltinList # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # rewardFoldCS) # infoF.inputs
+  -- let hasFoldToken = pany @PBuiltinList # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # rewardFoldCS) # infoF.inputs
+  let hasFoldToken = pany @PBuiltinList # plam (\out -> phasCS # (pfield @"value" # out) # rewardFoldCS) # infoF.outputs
+
   -- let rewardInp = pelemAt @PBuiltinList # pfromData rewardsIdx # infoF.inputs
   --     hasFoldToken = pvalueOf # (pfield @"value" # (pfield @"resolved" # rewardInp)) # pfromData rewardFoldCS # rewardFoldTN #== 1
   pif hasFoldToken (popaque $ pconstant ()) perror

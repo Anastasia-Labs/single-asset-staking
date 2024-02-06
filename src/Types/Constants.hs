@@ -34,12 +34,6 @@ poriginNodeTN =
       tn = "FSN"
    in pconstant tn
 
-pcorrNodeTN :: Term s PTokenName
-pcorrNodeTN =
-  let tn :: TokenName
-      tn = "FCN"
-   in pconstant tn
-
 psetNodePrefix :: ClosedTerm PByteString
 psetNodePrefix = pconstant "FSN"
 
@@ -65,6 +59,3 @@ minAda = pconstant 2_000_000
 
 nodeAda :: Term s PInteger
 nodeAda = pconstant 3_000_000
-
-exactAdaCommitment :: Term s PInteger
-exactAdaCommitment = pconstant 4_000_000

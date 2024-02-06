@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Spec.StakingSpec (unitTest) where
 
 import Plutarch.Context (
@@ -41,7 +39,7 @@ import Test.Tasty (TestTree)
 
 import Mint.Standard (mkStakingNodeMP)
 import Plutarch.Prelude
-import Types.Constants (exactAdaCommitment, poriginNodeTN)
+import Types.Constants (minAda, nodeAda, poriginNodeTN)
 import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 
 import Conversions (pconvert)
@@ -110,7 +108,7 @@ initAction = Init
 initUTXO :: UTXO
 initUTXO =
   mconcat
-    [ withValue (singleton "" "" 4_000_000)
+    [ withValue (singleton "" "" adaCommitment)
     , withRefTxId "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d"
     , withRefIndex 1
     ]
@@ -125,7 +123,7 @@ headUTXO :: UTXO
 headUTXO =
   mconcat
     [ address headAddr
-    , withValue (singleton "" "" 4_000_000 <> mintOriginNode <> mkStakeValue minimumStake)
+    , withValue (singleton "" "" adaCommitment <> mintOriginNode <> mkStakeValue minimumStake)
     , withInlineDatum $
         MkSetNode
           { key = Empty
@@ -150,11 +148,23 @@ deinitAction = Deinit
 burnOriginNode :: Value
 burnOriginNode = singleton nodeCS originNodeTN (-1)
 
+headUTXOAfterRFold :: UTXO
+headUTXOAfterRFold =
+  mconcat
+    [ address headAddr
+    , withValue (singleton "" "" (plift minAda) <> mintOriginNode <> mkStakeValue minimumStake)
+    , withInlineDatum $
+        MkSetNode
+          { key = Empty
+          , next = Key user1PKH
+          }
+    ]
+
 deinitScriptContext :: ScriptContext
 deinitScriptContext =
   buildMinting' $
     mconcat
-      [ input headUTXO
+      [ input headUTXOAfterRFold
       , mint burnOriginNode
       , withMinting nodeCS
       ]
@@ -178,7 +188,7 @@ mkStakeValue :: Integer -> Value
 mkStakeValue = singleton stakeCS stakeTN
 
 adaCommitment :: Integer
-adaCommitment = plift exactAdaCommitment
+adaCommitment = plift nodeAda
 
 coveringNodeValue :: Value
 coveringNodeValue = singleton "" "" adaCommitment <> coveringMintedValue <> mkStakeValue 1500
@@ -344,6 +354,31 @@ lateRemoveScriptContext =
       , signedWith (PubKeyHash user2PKH)
       ]
 
+claimAction :: StakingNodeAction
+claimAction = Claim (PubKeyHash user2PKH)
+
+claimValidTimeRange :: POSIXTimeRange
+claimValidTimeRange = Interval (Interval.lowerBound 200_000_000) (Interval.strictUpperBound 200_020_000)
+
+claimNodeUTXO :: UTXO
+claimNodeUTXO =
+  mconcat
+    [ address headAddr
+    , withValue (singleton "" "" (plift minAda) <> insertMintedValue <> mkStakeValue 2000)
+    , withInlineDatum removeNode
+    ]
+
+claimScriptContext :: ScriptContext
+claimScriptContext =
+  buildMinting' $
+    mconcat
+      [ input claimNodeUTXO
+      , mint removeMintedValue
+      , withMinting nodeCS
+      , timeRange claimValidTimeRange
+      , signedWith (PubKeyHash user2PKH)
+      ]
+
 unitTest :: TestTree
 unitTest = tryFromPTerm "Staking Unit Test" (mkStakingNodeMPW # stakingConfig) $ do
   testEvalCase
@@ -375,4 +410,10 @@ unitTest = tryFromPTerm "Staking Unit Test" (mkStakingNodeMPW # stakingConfig) $
     Success
     [ PlutusTx.toData removeAction
     , PlutusTx.toData lateRemoveScriptContext
+    ]
+  testEvalCase
+    "Pass - Claim Stake & Reward"
+    Success
+    [ PlutusTx.toData claimAction
+    , PlutusTx.toData claimScriptContext
     ]
