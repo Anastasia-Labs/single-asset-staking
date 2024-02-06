@@ -1,6 +1,6 @@
 # Single Asset Staking Unit Tests Documentation
 
-This offers a comprehensive guide to the Single Asset Staking unit tests within the project. The tests are meticulously designed to assess the accuracy and efficiency of the Single Asset Staking implementation, particularly focusing on the validation of actions involved during the staking  process.
+This page offers a comprehensive guide to the Single Asset Staking unit tests within the project. The tests are meticulously designed to assess the accuracy and efficiency of the Single Asset Staking implementation, particularly focusing on the validation of actions involved during the staking  process.
 
 ## Overview
 
