@@ -46,9 +46,11 @@ Unit Test Group
 All 6 tests passed (0.09s)
 ```
 
+A history of test execution results can be found on Github at [Single Asset Staking Tests](https://github.com/Anastasia-Labs/single-asset-staking/actions)
+
 ### Execution Time
 
-The entire suite was executed in roughly 0.08 seconds, showcasing the Staking validation process's speed and efficiency.
+The entire suite was executed in roughly 0.09 seconds, showcasing the Staking validation process's speed and efficiency.
 
 ## Conclusion
 
