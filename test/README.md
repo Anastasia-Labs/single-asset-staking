@@ -61,7 +61,7 @@ Single Asset Staking Tests
 All 7 tests passed (0.13s)
 ```
 
-Note: The datasets are generated randomly for each of the 100 tests, every time the tests are run. Dataset belonging to this test outcome summary can be found [here](../assets/datasets/valid-node.txt)
+Note: The datasets are generated randomly for each of the 100 tests, every time the tests are run. Dataset belonging to this test outcome summary can be found [here](../assets/test-reports/valid-node.txt)
 
 A history of test execution results can be found on Github at [Single Asset Staking Tests](https://github.com/Anastasia-Labs/single-asset-staking/actions)
 
