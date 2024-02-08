@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Spec.StakingSpec (unitTest, propertyTest) where
 
 import Plutarch.Context (
@@ -47,7 +45,7 @@ import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAct
 import Conversions (pconvert)
 import Data.ByteString.Char8 (pack)
 import Plutarch.Api.V2 (PMintingPolicy)
-import Test.Tasty.QuickCheck (Gen, Property, QC (QC), QuickCheckVerbose (QuickCheckVerbose), chooseInteger, elements, forAll, listOf, suchThat, tabulate, testProperty, vectorOf, (===))
+import Test.Tasty.QuickCheck (Gen, Property, elements, forAll, testProperty, vectorOf, (===))
 import Types.StakingSet (PStakingNodeAction (..), validNode)
 
 mkStakingNodeMPW ::
