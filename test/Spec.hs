@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Spec.StakingSpec (unitTest, propertyTest)
+import Spec.StakingSpec (propertyTest, unitTest)
 import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()

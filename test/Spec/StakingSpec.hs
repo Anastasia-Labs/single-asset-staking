@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Spec.StakingSpec (unitTest, propertyTest) where
 
 import Plutarch.Context (
@@ -44,10 +45,10 @@ import Types.Constants (minAda, nodeAda, poriginNodeTN)
 import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 
 import Conversions (pconvert)
-import Plutarch.Api.V2 (PMintingPolicy)
-import Types.StakingSet (PStakingNodeAction (..), validNode)
-import Test.Tasty.QuickCheck (Gen, Property, chooseInteger, forAll, suchThat, testProperty, listOf, elements, (===), tabulate, QC (QC), QuickCheckVerbose (QuickCheckVerbose), vectorOf)
 import Data.ByteString.Char8 (pack)
+import Plutarch.Api.V2 (PMintingPolicy)
+import Test.Tasty.QuickCheck (Gen, Property, QC (QC), QuickCheckVerbose (QuickCheckVerbose), chooseInteger, elements, forAll, listOf, suchThat, tabulate, testProperty, vectorOf, (===))
+import Types.StakingSet (PStakingNodeAction (..), validNode)
 
 mkStakingNodeMPW ::
   ClosedTerm
@@ -429,13 +430,13 @@ genBuiltinByteString = do
 prop_validNode :: Property
 prop_validNode = forAll genBuiltinByteString $ \hash1 ->
   let key = Key hash1
-  in forAll genBuiltinByteString $ \hash2 ->
-    let next = Key hash2
-        node = MkSetNode key next
-    in plift (validNode # pconstantData node) === (hash1 < hash2)
+   in forAll genBuiltinByteString $ \hash2 ->
+        let next = Key hash2
+            node = MkSetNode key next
+         in plift (validNode # pconstantData node) === (hash1 < hash2)
 
 propertyTest :: TestTree
-propertyTest = 
+propertyTest =
   testGroup
     "Property Based Tests"
     [ testProperty "Valid Node Check" prop_validNode
