@@ -1,4 +1,4 @@
-module Spec.StakingSpec (unitTest) where
+module Spec.StakingSpec (unitTest, propertyTest) where
 
 import Plutarch.Context (
   UTXO,
@@ -17,7 +17,7 @@ import Plutarch.Context (
   withValue,
  )
 import Plutarch.Test.Precompiled (Expectation (Success), testEvalCase, tryFromPTerm)
-import PlutusLedgerApi.V1 (POSIXTimeRange, Value)
+import PlutusLedgerApi.V1 (POSIXTimeRange, Value, toBuiltin)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 import PlutusLedgerApi.V2 (
   Address (..),
@@ -35,7 +35,7 @@ import PlutusLedgerApi.V2 (
  )
 
 import PlutusTx qualified
-import Test.Tasty (TestTree)
+import Test.Tasty (TestTree, testGroup)
 
 import Mint.Standard (mkStakingNodeMP)
 import Plutarch.Prelude
@@ -43,8 +43,10 @@ import Types.Constants (minAda, nodeAda, poriginNodeTN)
 import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 
 import Conversions (pconvert)
+import Data.ByteString.Char8 (pack)
 import Plutarch.Api.V2 (PMintingPolicy)
-import Types.StakingSet (PStakingNodeAction (..))
+import Test.Tasty.QuickCheck (Gen, Property, elements, forAll, testProperty, vectorOf, (===))
+import Types.StakingSet (PStakingNodeAction (..), validNode)
 
 mkStakingNodeMPW ::
   ClosedTerm
@@ -380,7 +382,7 @@ claimScriptContext =
       ]
 
 unitTest :: TestTree
-unitTest = tryFromPTerm "Staking Unit Test" (mkStakingNodeMPW # stakingConfig) $ do
+unitTest = tryFromPTerm "Unit Tests" (mkStakingNodeMPW # stakingConfig) $ do
   testEvalCase
     "Pass - Init Staking"
     Success
@@ -416,4 +418,24 @@ unitTest = tryFromPTerm "Staking Unit Test" (mkStakingNodeMPW # stakingConfig) $
     Success
     [ PlutusTx.toData claimAction
     , PlutusTx.toData claimScriptContext
+    ]
+
+genBuiltinByteString :: Gen BuiltinByteString
+genBuiltinByteString = do
+  member <- vectorOf 56 $ elements (['a' .. 'f'] ++ ['0' .. '9'])
+  return $ toBuiltin . pack $ member
+
+prop_validNode :: Property
+prop_validNode = forAll genBuiltinByteString $ \hash1 ->
+  let key = Key hash1
+   in forAll genBuiltinByteString $ \hash2 ->
+        let next = Key hash2
+            node = MkSetNode key next
+         in plift (validNode # pconstantData node) === (hash1 < hash2)
+
+propertyTest :: TestTree
+propertyTest =
+  testGroup
+    "Property Based Tests"
+    [ testProperty "Valid Node Check" prop_validNode
     ]

@@ -7,6 +7,7 @@
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Building and Developing](#building-and-developing)
+    - [Tests](#tests)
   - [License](#license)
 
 <!-- markdown-toc end -->
@@ -115,6 +116,10 @@ make export
 ```
 
 ![single-asset-staking](/assets/gifs/single-asset-staking.gif)
+
+### Tests
+
+For comprehensive information on the test suite for Single Asset Staking implementation, including unit tests and property-based tests, please refer to our [test documentation](/test/README.md).
 
 ## License
 
