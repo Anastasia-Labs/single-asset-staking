@@ -104,6 +104,7 @@ common dependencies
   build-depends:
     , aeson
     , aeson-pretty
+    , ansi-terminal
     , base
     , base16-bytestring
     , bytestring
@@ -112,7 +113,6 @@ common dependencies
     , data-default
     , directory
     , liqwid-plutarch-extra
-    , liqwid-script-export
     , plutarch
     , plutarch-extra
     , plutus-core
@@ -125,22 +125,15 @@ common dependencies
 
 common test-dependencies
   build-depends:
-    , base
-    , bytestring
     , hedgehog
     , hedgehog-quickcheck
-    , liqwid-plutarch-extra
-    , plutarch
     , plutarch-context-builder
-    , plutarch-extra
     , plutarch-quickcheck
     , plutarch-unit
-    , plutus-core
-    , plutus-ledger-api
-    , plutus-tx
     , tasty
     , tasty-hedgehog
     , tasty-hunit
+    , tasty-quickcheck
     , text
 
 library
