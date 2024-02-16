@@ -75,8 +75,11 @@ stakeTN = "MIN"
 minimumStake :: Integer
 minimumStake = 1_000
 
-initUTxO :: TxOutRef
-initUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
+stakingInitUTxO :: TxOutRef
+stakingInitUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
+
+rewardInitUTxO :: TxOutRef
+rewardInitUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 2
 
 freezeStake :: POSIXTime
 freezeStake = POSIXTime 96_400_000
@@ -94,7 +97,8 @@ stakingConfig :: Term s PStakingConfig
 stakingConfig =
   pconstant
     ( StakingConfig
-        { initUTxO
+        { stakingInitUTxO
+        , rewardInitUTxO
         , freezeStake
         , endStaking
         , penaltyAddress
