@@ -140,6 +140,7 @@ library
   import:          lang, dependencies
   exposed-modules:
     AlwaysFails
+    Config
     Mint.Common
     Mint.Helpers
     Mint.Standard

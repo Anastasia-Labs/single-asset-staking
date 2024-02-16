@@ -41,7 +41,7 @@ mkStakingNodeMP ::
         :--> PUnit
     )
 mkStakingNodeMP = plam $ \config redm ctx -> P.do
-  configF <- pletFields @'["initUTxO", "freezeStake", "endStaking"] config
+  configF <- pletFields @'["stakingInitUTxO", "freezeStake", "endStaking"] config
 
   (common, inputs, outs, sigs, vrange) <-
     runTermCont $
@@ -50,7 +50,7 @@ mkStakingNodeMP = plam $ \config redm ctx -> P.do
   pmatch redm $ \case
     PInit _ -> P.do
       passert "Init must consume TxOutRef" $
-        hasUtxoWithRef # configF.initUTxO # inputs
+        hasUtxoWithRef # configF.stakingInitUTxO # inputs
       pInit common
     PDeinit _ ->
       pDeinit common

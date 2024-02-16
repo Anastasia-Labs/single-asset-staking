@@ -36,6 +36,7 @@ import Validator (pDiscoverGlobalLogicW, pStakingSetValidator)
 import "liqwid-plutarch-extra" Plutarch.Extra.Script (
   applyArguments,
  )
+import Config (pmintConfigToken)
 
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript
@@ -64,6 +65,7 @@ writePlutusScript title filepath term = do
 main :: IO ()
 main = do
   putStrLn "Exporting Single Asset Staking Scripts"
+  writePlutusScript "Single Asset Staking - Config Policy" "./compiled/configPolicy.json" pmintConfigToken
   writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/stakingStakeValidator.json" pDiscoverGlobalLogicW
   writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator $ plift psetNodePrefix
   writePlutusScript "Single Asset Staking - Minting Validator" "./compiled/stakingMint.json" $ mkStakingNodeMPW

@@ -102,7 +102,8 @@ data PStakingLaunchConfig (s :: S)
 instance DerivePlutusType PStakingLaunchConfig where type DPTStrat _ = PlutusTypeData
 
 data StakingConfig = StakingConfig
-  { initUTxO :: TxOutRef
+  { stakingInitUTxO :: TxOutRef
+  , rewardInitUTxO :: TxOutRef
   , freezeStake :: POSIXTime
   , endStaking :: POSIXTime
   , penaltyAddress :: Address
@@ -118,7 +119,8 @@ data PStakingConfig (s :: S)
       ( Term
           s
           ( PDataRecord
-              '[ "initUTxO" ':= PTxOutRef
+              '[ "stakingInitUTxO" ':= PTxOutRef
+               , "rewardInitUTxO" ':= PTxOutRef
                , "freezeStake" ':= PPOSIXTime
                , "endStaking" ':= PPOSIXTime
                , "penaltyAddress" ':= PAddress
@@ -134,6 +136,9 @@ data PStakingConfig (s :: S)
 instance DerivePlutusType PStakingConfig where type DPTStrat _ = PlutusTypeData
 instance PUnsafeLiftDecl PStakingConfig where type PLifted PStakingConfig = StakingConfig
 deriving via (DerivePConstantViaData StakingConfig PStakingConfig) instance PConstantDecl StakingConfig
+
+instance PTryFrom PData (PAsData PStakingConfig)
+instance PTryFrom PData PStakingConfig
 
 data StakingNodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
