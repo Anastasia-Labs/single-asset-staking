@@ -91,6 +91,8 @@ data StakingConfig = StakingConfig
   , stakeCS :: CurrencySymbol
   , stakeTN :: TokenName
   , minimumStake :: Integer
+  , rewardCS :: CurrencySymbol
+  , rewardTN :: TokenName
   }
 
 PlutusTx.makeIsDataIndexed ''StakingConfig ([('StakingConfig, 0)])
@@ -130,6 +132,7 @@ PlutusTx.makeIsDataIndexed ''StakingNodeKey ([('Key, 0), ('Empty, 1)])
 data StakingSetNode = MkSetNode
   { key :: StakingNodeKey
   , next :: StakingNodeKey
+  , configTN :: TokenName
   }
   deriving stock (Show, Eq, Generic)
 PlutusTx.makeIsDataIndexed ''StakingSetNode ([('MkSetNode, 0)])
