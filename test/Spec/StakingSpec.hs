@@ -7,6 +7,7 @@ import Plutarch.Context (
   input,
   mint,
   output,
+  referenceInput,
   signedWith,
   timeRange,
   txId,
@@ -14,7 +15,7 @@ import Plutarch.Context (
   withMinting,
   withRefIndex,
   withRefTxId,
-  withValue, referenceInput,
+  withValue,
  )
 import Plutarch.Test.Precompiled (Expectation (Success), testEvalCase, tryFromPTerm)
 import PlutusLedgerApi.V1 (POSIXTimeRange, Value, toBuiltin)
@@ -44,7 +45,7 @@ import Types.StakingSet (StakingConfig (..), StakingNodeAction (..), StakingNode
 
 import Conversions (pconvert)
 import Data.ByteString.Char8 (pack)
-import Plutarch.Api.V2 (PMintingPolicy, PCurrencySymbol)
+import Plutarch.Api.V2 (PCurrencySymbol, PMintingPolicy)
 import Test.Tasty.QuickCheck (Gen, Property, elements, forAll, testProperty, vectorOf, (===))
 import Types.StakingSet (PStakingNodeAction (..), validNode)
 
