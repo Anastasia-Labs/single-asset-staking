@@ -12,7 +12,6 @@ module Types.StakingSet (
   PStakingConfig (..),
   StakingConfig (..),
   StakingNodeKey (..),
-  PStakingLaunchConfig (..),
   PSepNodeAction (..),
   PSeparatorConfig (..),
   PStakingSetNode (..),
@@ -40,7 +39,7 @@ import Plutarch.Api.V2 (
   PPubKeyHash (PPubKeyHash),
   PScriptHash (..),
   PStakingCredential (..),
-  PTokenName,
+  PTokenName (PTokenName),
   PTxOutRef,
  )
 import Plutarch.DataRepr (
@@ -83,24 +82,6 @@ deriving via
 instance PTryFrom PData (PAsData PNodeValidatorAction)
 instance PTryFrom PData PNodeValidatorAction
 
-data PStakingLaunchConfig (s :: S)
-  = PStakingLaunchConfig
-      ( Term
-          s
-          ( PDataRecord
-              '[ "freezeStake" ':= PPOSIXTime
-               , "globalCred" ':= PStakingCredential
-               , "stakeCS" ':= PCurrencySymbol
-               , "stakeTN" ':= PTokenName
-               , "minimumStake" ':= PInteger
-               ]
-          )
-      )
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PDataFields, PEq)
-
-instance DerivePlutusType PStakingLaunchConfig where type DPTStrat _ = PlutusTypeData
-
 data StakingConfig = StakingConfig
   { stakingInitUTxO :: TxOutRef
   , rewardInitUTxO :: TxOutRef
@@ -127,6 +108,8 @@ data PStakingConfig (s :: S)
                , "stakeCS" ':= PCurrencySymbol
                , "stakeTN" ':= PTokenName
                , "minimumStake" ':= PInteger
+               , "rewardCS" ':= PCurrencySymbol
+               , "rewardTN" ':= PTokenName
                ]
           )
       )
@@ -210,15 +193,6 @@ instance ScottConvertible PNodeKey where
     PKeyScott bs -> pcon (PKey (pdcons # pdata bs # pdnil))
     PEmptyScott -> pcon (PEmpty pdnil)
 
-data PStakingSetNodeState (s :: S) = PStakingSetNodeState
-  { key :: Term s PNodeKeyState
-  , next :: Term s PNodeKeyState
-  }
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PEq)
-
-instance DerivePlutusType PStakingSetNodeState where type DPTStrat _ = PlutusTypeScott
-
 data PStakingSetNode (s :: S)
   = PStakingSetNode
       ( Term
@@ -226,6 +200,7 @@ data PStakingSetNode (s :: S)
           ( PDataRecord
               '[ "key" ':= PNodeKey
                , "next" ':= PNodeKey
+               , "configTN" ':= PTokenName
                ]
           )
       )
@@ -248,27 +223,6 @@ deriving via
   instance
     PConstantDecl StakingSetNode
 
-instance ScottConvertible PStakingSetNode where
-  type ScottOf PStakingSetNode = PStakingSetNodeState
-  toScott discSetNode' = pmatch discSetNode' $ \(PStakingSetNode discSetNode) -> pletFields @'["key", "next"] discSetNode $ \discSetNodeF ->
-    pcon (PStakingSetNodeState {key = toScott discSetNodeF.key, next = toScott discSetNodeF.next})
-  fromScott discSetNode =
-    pmatch discSetNode $
-      \( PStakingSetNodeState
-          { key
-          , next
-          }
-        ) ->
-          ( pcon
-              ( PStakingSetNode
-                  ( pdcons @"key"
-                      # pdata (fromScott key)
-                      #$ (pdcons @"next" # pdata (fromScott next))
-                      #$ pdnil
-                  )
-              )
-          )
-
 data PSeparatorConfig (s :: S)
   = PSeparatorConfig
       ( Term
@@ -284,15 +238,17 @@ data PSeparatorConfig (s :: S)
 
 instance DerivePlutusType PSeparatorConfig where type DPTStrat _ = PlutusTypeData
 
-mkNode :: Term s (PNodeKey :--> PNodeKey :--> PStakingSetNode)
+mkNode :: Term s (PNodeKey :--> PNodeKey :--> PTokenName :--> PStakingSetNode)
 mkNode = phoistAcyclic $
-  plam $ \key next ->
+  plam $ \key next configTN ->
     pcon $
       PStakingSetNode $
         pdcons @"key"
           # pdata key
           #$ pdcons @"next"
           # pdata next
+          #$ pdcons @"configTN"
+          # pdata configTN
           #$ pdnil
 
 data PStakingNodeAction (s :: S)
@@ -345,12 +301,12 @@ deriving via
 -----------------------------------------------
 -- Helpers:
 
-mkBSNode :: ClosedTerm (PByteString :--> PByteString :--> PAsData PStakingSetNode)
+mkBSNode :: ClosedTerm (PByteString :--> PByteString :--> PTokenName :--> PAsData PStakingSetNode)
 mkBSNode = phoistAcyclic $
-  plam $ \key' next' ->
+  plam $ \key' next' configTN ->
     let key = pcon $ PKey $ pdcons @"_0" # pdata key' #$ pdnil
         next = pcon $ PKey $ pdcons @"_0" # pdata next' #$ pdnil
-     in pdata $ mkNode # key # next
+     in pdata $ mkNode # key # next # configTN
 
 -- | Checks that the node is the empty head node and the datum is empty
 isEmptySet :: ClosedTerm (PAsData PStakingSetNode :--> PBool)
@@ -394,10 +350,10 @@ isNothing = phoistAcyclic $
 -}
 asPredecessorOf :: ClosedTerm (PAsData PStakingSetNode :--> PByteString :--> PStakingSetNode)
 asPredecessorOf = phoistAcyclic $
-  plam $ \node next ->
-    let nodeKey = pfromData $ pfield @"key" # node
-        nextPK = pcon $ PKey $ pdcons @"_0" # pdata next #$ pdnil
-     in mkNode # nodeKey # nextPK
+  plam $ \node next -> P.do
+    nodeF <- pletFields @'["key", "configTN"] node
+    let nextPK = pcon $ PKey $ pdcons @"_0" # pdata next #$ pdnil
+    mkNode # nodeF.key # nextPK # nodeF.configTN
 
 {- | @
     key `asSuccessorOf` node
@@ -407,10 +363,10 @@ asPredecessorOf = phoistAcyclic $
 -}
 asSuccessorOf :: ClosedTerm (PByteString :--> PAsData PStakingSetNode :--> PStakingSetNode)
 asSuccessorOf = phoistAcyclic $
-  plam $ \key node ->
-    let nodeNext = pfromData $ pfield @"next" # node
-        keyPK = pcon $ PKey $ pdcons @"_0" # pdata key #$ pdnil
-     in mkNode # keyPK # nodeNext
+  plam $ \key node -> P.do
+    nodeF <- pletFields @'["next", "configTN"] node
+    let keyPK = pcon $ PKey $ pdcons @"_0" # pdata key #$ pdnil
+     in mkNode # keyPK # nodeF.next # nodeF.configTN
 
 -- | Extracts the next node key
 getNextPK :: ClosedTerm (PAsData PStakingSetNode :--> PMaybe PPubKeyHash)

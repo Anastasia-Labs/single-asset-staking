@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Mint.Helpers (
   coversSeparators,
   coversKey,
@@ -15,10 +13,8 @@ import Plutarch.Api.V2 (
   AmountGuarantees (NonZero),
   KeyGuarantees (Sorted),
   PCurrencySymbol,
-  PPubKeyHash,
   PTokenName,
   PTxInInfo,
-  PTxOut,
   PTxOutRef,
   PValue,
  )
@@ -28,7 +24,6 @@ import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Types.Constants (pnodeKeyTN)
 import Types.StakingSet (PNodeKey (PEmpty, PKey), PStakingSetNode)
-import Utils (phasCS)
 
 -- | Checks that key is 'covered' by the Node
 coversKey :: ClosedTerm (PAsData PStakingSetNode :--> PByteString :--> PBool)

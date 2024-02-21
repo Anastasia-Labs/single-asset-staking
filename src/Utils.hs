@@ -21,6 +21,7 @@ import Plutarch.Api.V2 (
   PValue (..),
  )
 import Plutarch.Bool (pand')
+import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude (
   ClosedTerm,
@@ -83,6 +84,7 @@ import Plutarch.Prelude (
   (#&&),
   type (:-->),
  )
+import Types.StakingSet (PStakingConfig ())
 import "liqwid-plutarch-extra" Plutarch.Extra.List (plookupAssoc)
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
 
@@ -755,3 +757,23 @@ infix 4 #>=
 (#/=) :: (PEq t) => Term s t -> Term s t -> Term s PBool
 a #/= b = pnot # (a #== b)
 infix 4 #/=
+
+{- Checks for the presence of only one config reference input, with a single
+  config token and returns pair of configTN and config datum
+-}
+fetchConfigDetails ::
+  ClosedTerm (PCurrencySymbol :--> PBuiltinList PTxInInfo :--> PPair PTokenName PStakingConfig)
+fetchConfigDetails = phoistAcyclic $
+  plam $ \configCS referenceInputs -> P.do
+    let configInput =
+          pfield @"resolved"
+            #$ pheadSingleton
+            # ( pfilter @PBuiltinList
+                  # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # configCS)
+                  # referenceInputs
+              )
+    configInputF <- pletFields @'["value", "datum"] configInput
+    PPair configTN _ <- pmatch $ psingletonOfCS # pdata configCS # configInputF.value
+
+    let configDatum = pfromPDatum @PStakingConfig #$ ptryFromInlineDatum # configInputF.datum
+    pcon $ PPair configTN configDatum
