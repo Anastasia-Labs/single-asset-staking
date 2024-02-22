@@ -66,13 +66,13 @@ main :: IO ()
 main = do
   putStrLn "Exporting Single Asset Staking Scripts"
   writePlutusScript "Single Asset Staking - Config Policy" "./compiled/configPolicy.json" pmintConfigToken
-  writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/stakingStakeValidator.json" pDiscoverGlobalLogicW
-  writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/stakingValidator.json" $ pStakingSetValidator $ plift psetNodePrefix
-  writePlutusScript "Single Asset Staking - Minting Validator" "./compiled/stakingMint.json" $ mkStakingNodeMPW
+  writePlutusScript "Single Asset Staking - Staking Validator" "./compiled/nodeStakeValidator.json" pDiscoverGlobalLogicW
+  writePlutusScript "Single Asset Staking - Spending Validator" "./compiled/nodeValidator.json" $ pStakingSetValidator $ plift psetNodePrefix
+  writePlutusScript "Single Asset Staking - Minting Validator" "./compiled/nodePolicy.json" $ mkStakingNodeMPW
   writePlutusScript "Commit Fold Validator" "./compiled/foldValidator.json" pfoldValidatorW
-  writePlutusScript "Commit Fold Mint" "./compiled/foldMint.json" pmintFoldPolicyW
+  writePlutusScript "Commit Fold Mint" "./compiled/foldPolicy.json" pmintFoldPolicyW
   writePlutusScript "Reward Fold Validator" "./compiled/rewardFoldValidator.json" prewardFoldValidatorW
-  writePlutusScript "Reward Fold Mint" "./compiled/rewardFoldMint.json" pmintRewardFoldPolicyW
+  writePlutusScript "Reward Fold Mint" "./compiled/rewardFoldPolicy.json" pmintRewardFoldPolicyW
   writePlutusScript "Token Holder Validator" "./compiled/tokenHolderValidator.json" prewardTokenHolder
   writePlutusScript "Token Holder Policy" "./compiled/tokenHolderPolicy.json" pmintRewardTokenHolder
   writePlutusScript "Always Fails" "./compiled/alwaysFails.json" pAlwaysFails
