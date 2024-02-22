@@ -15,7 +15,7 @@ import Mint.Helpers (
   correctNodeTokenMinted,
   coversKey,
  )
-import Plutarch.Api.V1.Value (plovelaceValueOf, pnormalize, pvalueOf)
+import Plutarch.Api.V1.Value (PTokenName, plovelaceValueOf, pnormalize, pvalueOf)
 import Plutarch.Api.V2 (
   AmountGuarantees (..),
   KeyGuarantees (..),
@@ -80,39 +80,32 @@ nodeInputUtxoDatum = phoistAcyclic $
       punsafeCoerce $
         ptryFromInlineDatum # txOut.datum
 
-nodeInputUtxoDatumUnsafe ::
-  ClosedTerm
-    ( PTxOut
-        :--> PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)
-    )
-nodeInputUtxoDatumUnsafe = phoistAcyclic $
-  plam $ \out -> pletFields @'["value", "datum"] out $ \outF ->
-    plet (punsafeCoerce $ ptryFromInlineDatum # outF.datum) $ \nodeDat ->
-      pcon (PPair (pfromData outF.value) nodeDat)
-
 parseNodeOutputUtxo ::
   ClosedTerm
     ( PStakingConfig
+        :--> PTokenName
         :--> PAsData PCurrencySymbol
         :--> PTxOut
         :--> PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)
     )
 parseNodeOutputUtxo = phoistAcyclic $
-  plam $ \config nodeCS out -> P.do
+  plam $ \config configTN nodeCS out -> P.do
     configF <- pletFields @'["stakeCS", "stakeTN", "minimumStake"] config
     txOut <- pletFields @'["address", "value", "datum"] out
     value <- plet $ pfromData $ txOut.value
     PPair tn amount <- pmatch $ psingletonOfCS # nodeCS # value
     POutputDatum od <- pmatch $ pfromData $ txOut.datum
     datum <- plet $ pfromPDatum #$ pfield @"outputDatum" # od
+    datumF <- pletFields @'["key", "configTN"] datum
     let nodeKey = pparseNodeKey # tn
-        datumKey = pmatch (pfield @"key" # datum) $ \case
+        datumKey = pmatch datumF.key $ \case
           PEmpty _ -> pcon PNothing
           PKey ((pfield @"_0" #) -> key) -> pcon $ PJust key
 
     -- Prevents TokenDust attack
     passert "All FSN tokens from node policy" $
       pheadSingleton # (pfindCurrencySymbolsByTokenPrefix # value # pconstant "FSN") #== nodeCS
+    passert "Incorrect ConfigTN" $ configTN #== datumF.configTN
     passert "Insufficient stake" $
       pvalueOf # value # configF.stakeCS # configF.stakeTN #>= configF.minimumStake
     passert "Too many assets" $ pcountOfUniqueTokens # value #== 3
@@ -124,9 +117,25 @@ parseNodeOutputUtxo = phoistAcyclic $
     -- todo maxStakeCommitment?
     pcon (PPair value datum)
 
+parseNodeInputUtxo ::
+  ClosedTerm
+    ( PTokenName
+        :--> PTxOut
+        :--> PPair (PValue 'Sorted 'Positive) (PAsData PStakingSetNode)
+    )
+parseNodeInputUtxo = phoistAcyclic $
+  plam $ \configTN input -> P.do
+    inputF <- pletFields @'["value", "datum"] input
+    datum <- plet $ pfromPDatum #$ ptryFromInlineDatum # inputF.datum
+
+    passert "Incorrect ConfigTN" $ configTN #== (pfield @"configTN" # datum)
+
+    pcon $ PPair inputF.value datum
+
 makeCommon ::
   forall {r :: PType} {s :: S}.
   Term s PStakingConfig ->
+  Term s PTokenName ->
   Term s PScriptContext ->
   TermCont @r
     s
@@ -136,7 +145,7 @@ makeCommon ::
     , Term s (PBuiltinList (PAsData PPubKeyHash))
     , Term s (PInterval PPOSIXTime)
     )
-makeCommon config ctx' = do
+makeCommon config configTN ctx' = do
   -- Preparing info needed for validation
   ctx <- tcont $ pletFields @'["txInfo", "purpose"] ctx'
   info <-
@@ -171,12 +180,17 @@ makeCommon config ctx' = do
 
   pguardC "all same origin" atNodeValidator
 
-  nodeInputs <- tcont . plet $ pmap # nodeInputUtxoDatumUnsafe #$ pconvertLists # fromNodeValidator
+  nodeInputs <-
+    tcont . plet $
+      pmap
+        # (parseNodeInputUtxo # configTN)
+        #$ pconvertLists
+        # fromNodeValidator
 
   nodeOutputs <-
     tcont . plet $
       pmap
-        # (parseNodeOutputUtxo # config # ownCS)
+        # (parseNodeOutputUtxo # config # configTN # ownCS)
         #$ pconvertLists
         # toNodeValidator
 

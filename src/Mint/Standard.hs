@@ -6,6 +6,7 @@ module Mint.Standard (
 ) where
 
 import Plutarch.Api.V2 (
+  PCurrencySymbol,
   PMintingPolicy,
   PScriptContext,
  )
@@ -26,8 +27,8 @@ import Plutarch.Monadic qualified as P
 
 import Conversions (pconvert)
 import Plutarch.Prelude
-import Types.StakingSet (PStakingConfig (..), PStakingNodeAction (..))
-import Utils (pand'List, passert)
+import Types.StakingSet (PStakingNodeAction (..))
+import Utils (fetchConfigDetails, pand'List, passert)
 
 --------------------------------
 -- Staking Node Minting Policy
@@ -35,22 +36,25 @@ import Utils (pand'List, passert)
 
 mkStakingNodeMP ::
   ClosedTerm
-    ( PStakingConfig
+    ( PCurrencySymbol
         :--> PStakingNodeAction
         :--> PScriptContext
         :--> PUnit
     )
-mkStakingNodeMP = plam $ \config redm ctx -> P.do
-  configF <- pletFields @'["initUTxO", "freezeStake", "endStaking"] config
+mkStakingNodeMP = plam $ \configCS redm ctx -> P.do
+  ctxF <- pletFields @'["txInfo"] ctx
+  PPair configTN config <- pmatch $ fetchConfigDetails # configCS # (pfield @"referenceInputs" # ctxF.txInfo)
+
+  configF <- pletFields @'["stakingInitUTxO", "freezeStake", "endStaking"] config
 
   (common, inputs, outs, sigs, vrange) <-
     runTermCont $
-      makeCommon config ctx
+      makeCommon config configTN ctx
 
   pmatch redm $ \case
     PInit _ -> P.do
       passert "Init must consume TxOutRef" $
-        hasUtxoWithRef # configF.initUTxO # inputs
+        hasUtxoWithRef # configF.stakingInitUTxO # inputs
       pInit common
     PDeinit _ ->
       pDeinit common
@@ -73,9 +77,9 @@ mkStakingNodeMP = plam $ \config redm ctx -> P.do
 
 mkStakingNodeMPW ::
   ClosedTerm
-    ( PStakingConfig
+    ( PCurrencySymbol
         :--> PMintingPolicy
     )
-mkStakingNodeMPW = phoistAcyclic $ plam $ \config redm ctx ->
+mkStakingNodeMPW = phoistAcyclic $ plam $ \configCS redm ctx ->
   let red = pconvert @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP # config # red # ctx
+   in popaque $ mkStakingNodeMP # configCS # red # ctx

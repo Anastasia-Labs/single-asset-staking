@@ -7,6 +7,7 @@ import Plutarch.Context (
   input,
   mint,
   output,
+  referenceInput,
   signedWith,
   timeRange,
   txId,
@@ -40,22 +41,28 @@ import Test.Tasty (TestTree, testGroup)
 import Mint.Standard (mkStakingNodeMP)
 import Plutarch.Prelude
 import Types.Constants (minAda, nodeAda, poriginNodeTN)
-import Types.StakingSet (PStakingConfig (..), StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
+import Types.StakingSet (StakingConfig (..), StakingNodeAction (..), StakingNodeKey (..), StakingSetNode (..))
 
 import Conversions (pconvert)
 import Data.ByteString.Char8 (pack)
-import Plutarch.Api.V2 (PMintingPolicy)
+import Plutarch.Api.V2 (PCurrencySymbol, PMintingPolicy)
 import Test.Tasty.QuickCheck (Gen, Property, elements, forAll, testProperty, vectorOf, (===))
 import Types.StakingSet (PStakingNodeAction (..), validNode)
 
 mkStakingNodeMPW ::
   ClosedTerm
-    ( PStakingConfig
+    ( PCurrencySymbol
         :--> PMintingPolicy
     )
-mkStakingNodeMPW = phoistAcyclic $ plam $ \config redm ctx ->
+mkStakingNodeMPW = phoistAcyclic $ plam $ \configCS redm ctx ->
   let red = pconvert @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP # config # red # ctx
+   in popaque $ mkStakingNodeMP # configCS # red # ctx
+
+configCS :: CurrencySymbol
+configCS = "446fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b99a4"
+
+configTN :: TokenName
+configTN = "123fa3ba2daded6ab9ccc1e39d3835aa"
 
 nodeCS :: CurrencySymbol
 nodeCS = "746fa3ba2daded6ab9ccc1e39d3835aa1dfcb9b5a54acc2ebe6b79a4"
@@ -75,8 +82,11 @@ stakeTN = "MIN"
 minimumStake :: Integer
 minimumStake = 1_000
 
-initUTxO :: TxOutRef
-initUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
+stakingInitUTxO :: TxOutRef
+stakingInitUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
+
+rewardInitUTxO :: TxOutRef
+rewardInitUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 2
 
 freezeStake :: POSIXTime
 freezeStake = POSIXTime 96_400_000
@@ -90,19 +100,29 @@ penaltyAddress =
       stakeCred = PubKeyCredential "52563c5410bff6a0d43ccebb7c37e1f69f5eb260552521adff33b9c2"
    in Address (ScriptCredential cred) (Just (StakingHash stakeCred))
 
-stakingConfig :: Term s PStakingConfig
+stakingConfig :: StakingConfig
 stakingConfig =
-  pconstant
-    ( StakingConfig
-        { initUTxO
-        , freezeStake
-        , endStaking
-        , penaltyAddress
-        , stakeCS
-        , stakeTN
-        , minimumStake
-        }
-    )
+  StakingConfig
+    { stakingInitUTxO
+    , rewardInitUTxO
+    , freezeStake
+    , endStaking
+    , penaltyAddress
+    , stakeCS
+    , stakeTN
+    , minimumStake
+    , rewardCS = stakeCS
+    , rewardTN = stakeTN
+    }
+
+configUTXO :: UTXO
+configUTXO =
+  mconcat
+    [ withValue (singleton configCS configTN 1)
+    , withRefTxId "346dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d"
+    , withRefIndex 1
+    , withInlineDatum stakingConfig
+    ]
 
 initAction :: StakingNodeAction
 initAction = Init
@@ -130,6 +150,7 @@ headUTXO =
         MkSetNode
           { key = Empty
           , next = Empty
+          , configTN = configTN
           }
     ]
 
@@ -142,6 +163,7 @@ initScriptContext =
       , output headUTXO
       , mint mintOriginNode
       , withMinting nodeCS
+      , referenceInput configUTXO
       ]
 
 deinitAction :: StakingNodeAction
@@ -159,6 +181,7 @@ headUTXOAfterRFold =
         MkSetNode
           { key = Empty
           , next = Key user1PKH
+          , configTN = configTN
           }
     ]
 
@@ -169,6 +192,7 @@ deinitScriptContext =
       [ input headUTXOAfterRFold
       , mint burnOriginNode
       , withMinting nodeCS
+      , referenceInput configUTXO
       ]
 
 user1PKH :: BuiltinByteString
@@ -203,6 +227,7 @@ coveringNode =
   MkSetNode
     { key = Key user1PKH
     , next = Empty
+    , configTN = configTN
     }
 
 coveringUTXO :: UTXO
@@ -218,6 +243,7 @@ outputPrevNode =
   MkSetNode
     { key = coveringNode.key
     , next = Key user2PKH
+    , configTN = configTN
     }
 
 outputPrevNodeUTXO :: UTXO
@@ -233,6 +259,7 @@ outputNode =
   MkSetNode
     { key = Key user2PKH
     , next = coveringNode.next
+    , configTN = configTN
     }
 
 outputNodeUTXO :: UTXO
@@ -260,6 +287,7 @@ insertScriptContext =
       , withMinting nodeCS
       , timeRange insertValidTimeRange
       , signedWith (PubKeyHash user2PKH)
+      , referenceInput configUTXO
       ]
 
 removeAction :: StakingNodeAction
@@ -270,6 +298,7 @@ rmCoveringNode =
   MkSetNode
     { key = Key user1PKH
     , next = Key user2PKH
+    , configTN = configTN
     }
 
 inputPrevNodeUTXO :: UTXO
@@ -285,6 +314,7 @@ removeNode =
   MkSetNode
     { key = Key user2PKH
     , next = Empty
+    , configTN = configTN
     }
 
 removeNodeUTXO :: UTXO
@@ -300,6 +330,7 @@ rmOutputNode =
   MkSetNode
     { key = rmCoveringNode.key
     , next = removeNode.next
+    , configTN = configTN
     }
 
 rmOutputNodeUTXO :: UTXO
@@ -330,6 +361,7 @@ removeScriptContext =
       , withMinting nodeCS
       , timeRange removeValidTimeRange
       , signedWith (PubKeyHash user2PKH)
+      , referenceInput configUTXO
       ]
 
 removeValidLateTimeRange :: POSIXTimeRange
@@ -354,6 +386,7 @@ lateRemoveScriptContext =
       , withMinting nodeCS
       , timeRange removeValidLateTimeRange
       , signedWith (PubKeyHash user2PKH)
+      , referenceInput configUTXO
       ]
 
 claimAction :: StakingNodeAction
@@ -379,10 +412,11 @@ claimScriptContext =
       , withMinting nodeCS
       , timeRange claimValidTimeRange
       , signedWith (PubKeyHash user2PKH)
+      , referenceInput configUTXO
       ]
 
 unitTest :: TestTree
-unitTest = tryFromPTerm "Unit Tests" (mkStakingNodeMPW # stakingConfig) $ do
+unitTest = tryFromPTerm "Unit Tests" (mkStakingNodeMPW # pconstant configCS) $ do
   testEvalCase
     "Pass - Init Staking"
     Success
@@ -430,7 +464,7 @@ prop_validNode = forAll genBuiltinByteString $ \hash1 ->
   let key = Key hash1
    in forAll genBuiltinByteString $ \hash2 ->
         let next = Key hash2
-            node = MkSetNode key next
+            node = MkSetNode key next configTN
          in plift (validNode # pconstantData node) === (hash1 < hash2)
 
 propertyTest :: TestTree

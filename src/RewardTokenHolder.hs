@@ -11,7 +11,7 @@ module RewardTokenHolder (
 ) where
 
 import Conversions (pconvert)
-import Plutarch.Api.V1.Value (pnormalize)
+import Plutarch.Api.V1.Value (PTokenName, pnormalize, pvalueOf)
 import Plutarch.Api.V2 (
   PCurrencySymbol,
   PMintingPolicy,
@@ -20,9 +20,11 @@ import Plutarch.Api.V2 (
   PTxOutRef,
   PValidator,
  )
+import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
+import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Types.Constants (rewardTokenHolderTN)
-import Utils (pand'List, pfindCurrencySymbolsByTokenName, phasInput, pheadSingleton, ptryLookupValue, ptryOwnInput)
+import Utils (fetchConfigDetails, pand'List, pfindCurrencySymbolsByTokenName, phasInput, pheadSingleton, ptryLookupValue, ptryOwnInput)
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletC,
   pletFieldsC,
@@ -42,12 +44,16 @@ instance PTryFrom PData PTokenHolderMintAct
 
 instance PTryFrom PData (PAsData PTokenHolderMintAct)
 
-pmintRewardTokenHolder :: Term s (PTxOutRef :--> PMintingPolicy)
+pmintRewardTokenHolder :: Term s (PCurrencySymbol :--> PMintingPolicy)
 pmintRewardTokenHolder = phoistAcyclic $
-  plam $ \oref redm ctx ->
+  plam $ \configCS redm ctx -> P.do
+    ctxF <- pletFields @'["txInfo"] ctx
+    PPair configTN config <- pmatch $ fetchConfigDetails # configCS # (pfield @"referenceInputs" # ctxF.txInfo)
+    configF <- pletFields @'["rewardInitUTxO"] config
+
     let red = pconvert @PTokenHolderMintAct redm
      in pmatch red $ \case
-          PMintHolder _ -> popaque $ pmintTokenHolder # oref # ctx
+          PMintHolder _ -> popaque $ pmintTokenHolder # configTN # configF.rewardInitUTxO # ctx
           PBurnHolder _ -> popaque $ pburnTokenHolder # ctx
 
 pburnTokenHolder :: Term s (PScriptContext :--> PUnit)
@@ -64,16 +70,25 @@ pburnTokenHolder = phoistAcyclic $
     pure $
       pif (pfromData numMinted #== -1) (pconstant ()) perror
 
-pmintTokenHolder :: Term s (PTxOutRef :--> PScriptContext :--> PUnit)
+pmintTokenHolder :: Term s (PTokenName :--> PTxOutRef :--> PScriptContext :--> PUnit)
 pmintTokenHolder = phoistAcyclic $
-  plam $ \oref ctx -> unTermCont $ do
+  plam $ \configTN oref ctx -> unTermCont $ do
     contextFields <- pletFieldsC @'["txInfo", "purpose"] ctx
     PMinting policy <- pmatchC contextFields.purpose
     ownPolicyId <- pletC $ pfield @"_0" # policy
 
-    info <- pletFieldsC @'["inputs", "mint"] contextFields.txInfo
+    info <- pletFieldsC @'["inputs", "mint", "outputs"] contextFields.txInfo
     tkPairs <- pletC $ ptryLookupValue # ownPolicyId # (pnormalize # info.mint)
     tkPair <- pletC (pheadSingleton # tkPairs)
+
+    let output =
+          pheadSingleton
+            # ( pfilter @PBuiltinList
+                  # plam (\out -> pvalueOf # (pfield @"value" # out) # pfromData ownPolicyId # rewardTokenHolderTN #== 1)
+                  # info.outputs
+              )
+    outConfigTN <- pletC $ pfromPDatum #$ ptryFromInlineDatum #$ pfield @"datum" # output
+
     let numMinted = psndBuiltin # tkPair
         tkMinted = pfstBuiltin # tkPair
         mintChecks =
@@ -81,30 +96,44 @@ pmintTokenHolder = phoistAcyclic $
             [ pfromData numMinted #== 1
             , rewardTokenHolderTN #== pfromData tkMinted
             , phasInput # info.inputs # oref
+            , pfromData outConfigTN #== configTN
             ]
+
     pure $
       pif (mintChecks) (pconstant ()) perror
 
-prewardTokenHolder :: Term s (PAsData PCurrencySymbol :--> PValidator)
-prewardTokenHolder = phoistAcyclic $ plam $ \rewardFoldCS _dat _redeemer ctx -> unTermCont $ do
-  ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
-  infoF <- pletFieldsC @'["inputs", "mint"] ctxF.txInfo
+prewardTokenHolder :: Term s (PCurrencySymbol :--> PAsData PCurrencySymbol :--> PValidator)
+prewardTokenHolder = phoistAcyclic $
+  plam $ \configCS rewardFoldCS dat _red ctx -> unTermCont $ do
+    ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
+    infoF <- pletFieldsC @'["inputs", "mint", "referenceInputs"] ctxF.txInfo
 
-  PSpending ((pfield @"_0" #) -> ownRef) <- pmatchC ctxF.purpose
-  let ownInput = ptryOwnInput # infoF.inputs # ownRef
-  ownInputF <- pletFieldsC @'["value"] ownInput
+    PPair configTN _ <- pmatchC $ fetchConfigDetails # configCS # infoF.referenceInputs
+    ownConfigTN <- pletC $ pconvert dat
 
-  mintedValue <- pletC (pnormalize # infoF.mint)
-  let possibleCSs = pfindCurrencySymbolsByTokenName # ownInputF.value # rewardTokenHolderTN
-      pthCS = pheadSingleton # possibleCSs
+    PSpending ((pfield @"_0" #) -> ownRef) <- pmatchC ctxF.purpose
+    let ownInput = ptryOwnInput # infoF.inputs # ownRef
+    ownInputF <- pletFieldsC @'["value"] ownInput
 
-  let tkhPairs = ptryLookupValue # pthCS # mintedValue
-      tkhPair = (pheadSingleton # tkhPairs)
-      thkMinted = psndBuiltin # tkhPair
+    mintedValue <- pletC (pnormalize # infoF.mint)
+    let possibleCSs = pfindCurrencySymbolsByTokenName # ownInputF.value # rewardTokenHolderTN
+        pthCS = pheadSingleton # possibleCSs
 
-  tkPairs <- pletC $ ptryLookupValue # rewardFoldCS # mintedValue
-  tkPair <- pletC (pheadSingleton # tkPairs)
-  let rewardTkMinted = psndBuiltin # tkPair
+    let tkhPairs = ptryLookupValue # pthCS # mintedValue
+        tkhPair = (pheadSingleton # tkhPairs)
+        thkMinted = psndBuiltin # tkhPair
 
-  pure $
-    pif (pfromData rewardTkMinted #== 1 #&& pfromData thkMinted #== -1) (popaque $ pconstant ()) perror
+    tkPairs <- pletC $ ptryLookupValue # rewardFoldCS # mintedValue
+    tkPair <- pletC (pheadSingleton # tkPairs)
+    let rewardTkMinted = psndBuiltin # tkPair
+
+    pure $
+      pif
+        ( pand'List
+            [ pfromData rewardTkMinted #== 1
+            , pfromData thkMinted #== -1
+            , pfromData ownConfigTN #== configTN
+            ]
+        )
+        (popaque $ pconstant ())
+        perror
