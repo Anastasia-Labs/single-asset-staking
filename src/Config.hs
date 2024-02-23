@@ -57,6 +57,7 @@ pmintConfigToken = phoistAcyclic $
           , ptraceIfFalse "Incorrect Token Name" $ tnMinted #== calculatedTN
           , ptraceIfFalse "Incorrect Config Output Address" $ configOutputF.address #== address
           , ptraceIfFalse "Required Input Missing" $ phasInput # infoF.inputs # oref
+          , ptraceIfFalse "Tx Index Byte Overflow" $ pfromData orefF.idx #< 256
           ]
       )
       (popaque $ pconstant ())
