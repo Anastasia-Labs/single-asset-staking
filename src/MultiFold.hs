@@ -16,7 +16,6 @@ import Plutarch.Api.V2 (
   PCurrencySymbol,
   PMintingPolicy,
   POutputDatum (POutputDatum),
-  PPOSIXTime (..),
   PScriptContext,
   PScriptPurpose (PMinting, PSpending),
   PTokenName (..),
@@ -87,24 +86,6 @@ instance DerivePlutusType PFoldMintAct where
 instance PTryFrom PData PFoldMintAct
 
 instance PTryFrom PData (PAsData PFoldMintAct)
-
-data PFoldConfig (s :: S)
-  = PFoldConfig
-      ( Term
-          s
-          ( PDataRecord
-              '[ "nodeCS" ':= PCurrencySymbol
-               , "stakeCS" ':= PCurrencySymbol
-               , "stakeTN" ':= PTokenName
-               , "endStaking" ':= PPOSIXTime
-               ]
-          )
-      )
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PDataFields)
-
-instance DerivePlutusType PFoldConfig where
-  type DPTStrat _ = PlutusTypeData
 
 data PFoldDatum (s :: S)
   = PFoldDatum
@@ -227,19 +208,19 @@ pmintCommitFold = phoistAcyclic $
         (pconstant ())
         perror
 
-pfoldValidatorW :: Term s (PCurrencySymbol :--> PCurrencySymbol :--> PValidator)
+pfoldValidatorW :: Term s (PAsData PCurrencySymbol :--> PAsData PCurrencySymbol :--> PValidator)
 pfoldValidatorW = phoistAcyclic $
   plam $ \configCS nodeCS datum redeemer ctx -> P.do
     ctxF <- pletFields @'["txInfo", "purpose"] ctx
     infoF <- pletFields @'["inputs", "signatories", "mint", "referenceInputs"] ctxF.txInfo
 
-    PPair configTN config <- pmatch $ fetchConfigDetails # configCS # infoF.referenceInputs
+    PPair configTN config <- pmatch $ fetchConfigDetails # pfromData configCS # infoF.referenceInputs
 
     let dat = pconvert @PFoldDatum datum
         red = pconvert @PFoldAct redeemer
      in pmatch red $ \case
           PFoldNodes r -> pletFields @'["nodeIdxs"] r $ \redF ->
-            pfoldNodes # config # configTN # nodeCS # redF.nodeIdxs # dat # ctx
+            pfoldNodes # config # configTN # pfromData nodeCS # redF.nodeIdxs # dat # ctx
           PReclaim _ -> unTermCont $ do
             datF <- pletFieldsC @'["owner", "currNode"] dat
             PPubKeyCredential ((pfield @"_0" #) -> ownerPkh) <- pmatchC (pfield @"credential" # datF.owner)
@@ -648,19 +629,19 @@ pfoldCorrespondingUTxOs config configTN nodeCS totalRewardTokens totalStaked acc
     # la
     # lb
 
-prewardFoldValidatorW :: Term s (PCurrencySymbol :--> PCurrencySymbol :--> PValidator)
+prewardFoldValidatorW :: Term s (PAsData PCurrencySymbol :--> PAsData PCurrencySymbol :--> PValidator)
 prewardFoldValidatorW = phoistAcyclic $
   plam $ \configCS nodeCS datum redeemer ctx -> P.do
     ctxF <- pletFields @'["txInfo", "purpose"] ctx
     infoF <- pletFields @'["inputs", "signatories", "mint", "referenceInputs"] ctxF.txInfo
-    PPair configTN config <- pmatch $ fetchConfigDetails # configCS # infoF.referenceInputs
+    PPair configTN config <- pmatch $ fetchConfigDetails # pfromData configCS # infoF.referenceInputs
 
     let dat = pconvert @PRewardFoldDatum datum
         red = pconvert @PRewardsFoldAct redeemer
      in pmatch red $ \case
-          PRewardsFoldNode _ -> prewardFoldNode # config # configTN # nodeCS # dat # ctx
+          PRewardsFoldNode _ -> prewardFoldNode # config # configTN # pfromData nodeCS # dat # ctx
           PRewardsFoldNodes r -> pletFields @'["nodeIdxs", "nodeOutIdxs"] r $ \redF ->
-            prewardFoldNodes # config # configTN # nodeCS # redF.nodeIdxs # redF.nodeOutIdxs # dat # ctx
+            prewardFoldNodes # config # configTN # pfromData nodeCS # redF.nodeIdxs # redF.nodeOutIdxs # dat # ctx
           PRewardsReclaim _ -> unTermCont $ do
             datF <- pletFieldsC @'["owner", "currNode"] dat
             currNodeF <- pletFieldsC @'["next", "configTN"] datF.currNode

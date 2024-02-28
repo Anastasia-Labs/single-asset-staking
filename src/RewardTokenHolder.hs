@@ -44,11 +44,11 @@ instance PTryFrom PData PTokenHolderMintAct
 
 instance PTryFrom PData (PAsData PTokenHolderMintAct)
 
-pmintRewardTokenHolder :: Term s (PCurrencySymbol :--> PMintingPolicy)
+pmintRewardTokenHolder :: Term s (PAsData PCurrencySymbol :--> PMintingPolicy)
 pmintRewardTokenHolder = phoistAcyclic $
   plam $ \configCS redm ctx -> P.do
     ctxF <- pletFields @'["txInfo"] ctx
-    PPair configTN config <- pmatch $ fetchConfigDetails # configCS # (pfield @"referenceInputs" # ctxF.txInfo)
+    PPair configTN config <- pmatch $ fetchConfigDetails # pfromData configCS # (pfield @"referenceInputs" # ctxF.txInfo)
     configF <- pletFields @'["rewardInitUTxO"] config
 
     let red = pconvert @PTokenHolderMintAct redm
@@ -102,13 +102,13 @@ pmintTokenHolder = phoistAcyclic $
     pure $
       pif (mintChecks) (pconstant ()) perror
 
-prewardTokenHolder :: Term s (PCurrencySymbol :--> PAsData PCurrencySymbol :--> PValidator)
+prewardTokenHolder :: Term s (PAsData PCurrencySymbol :--> PAsData PCurrencySymbol :--> PValidator)
 prewardTokenHolder = phoistAcyclic $
   plam $ \configCS rewardFoldCS dat _red ctx -> unTermCont $ do
     ctxF <- pletFieldsC @'["txInfo", "purpose"] ctx
     infoF <- pletFieldsC @'["inputs", "mint", "referenceInputs"] ctxF.txInfo
 
-    PPair configTN _ <- pmatchC $ fetchConfigDetails # configCS # infoF.referenceInputs
+    PPair configTN _ <- pmatchC $ fetchConfigDetails # pfromData configCS # infoF.referenceInputs
     ownConfigTN <- pletC $ pconvert dat
 
     PSpending ((pfield @"_0" #) -> ownRef) <- pmatchC ctxF.purpose

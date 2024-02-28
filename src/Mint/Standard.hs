@@ -75,11 +75,7 @@ mkStakingNodeMP = plam $ \configCS redm ctx -> P.do
       passert "Cannot claim before endStaking" (pbefore # configF.endStaking # vrange)
       pClaim common sigs act.keyToRemove
 
-mkStakingNodeMPW ::
-  ClosedTerm
-    ( PCurrencySymbol
-        :--> PMintingPolicy
-    )
+mkStakingNodeMPW :: ClosedTerm (PAsData PCurrencySymbol :--> PMintingPolicy)
 mkStakingNodeMPW = phoistAcyclic $ plam $ \configCS redm ctx ->
   let red = pconvert @PStakingNodeAction redm
-   in popaque $ mkStakingNodeMP # configCS # red # ctx
+   in popaque $ mkStakingNodeMP # pfromData configCS # red # ctx

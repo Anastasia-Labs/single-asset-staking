@@ -46,7 +46,7 @@ pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardFoldCS' _redeemer ctx -> P
 
 pStakingSetValidator ::
   ByteString ->
-  ClosedTerm (PCurrencySymbol :--> PStakingCredential :--> PValidator)
+  ClosedTerm (PAsData PCurrencySymbol :--> PStakingCredential :--> PValidator)
 pStakingSetValidator prefix = plam $ \configCS globalCred dat red ctx' ->
   let redeemer = pconvert @PNodeValidatorAction red
       oldDatum = pconvert @PStakingSetNode dat
@@ -85,7 +85,7 @@ pStakingSetValidator prefix = plam $ \configCS globalCred dat red ctx' ->
                  Like Reward Fold Policy & Validator check for it, their invocation is
                  checked by gobalCred Stake Validator whose invocation is checked in PRewardFoldAct
               -}
-              PPair configTN config <- pmatch $ fetchConfigDetails # configCS # info.referenceInputs
+              PPair configTN config <- pmatch $ fetchConfigDetails # pfromData configCS # info.referenceInputs
               configF <- pletFields @'["freezeStake", "stakeCS", "stakeTN", "minimumStake"] config
 
               oldDatumF <- pletFields @'["key", "configTN"] oldDatum
