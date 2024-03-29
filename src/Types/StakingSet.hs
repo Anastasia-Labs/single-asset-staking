@@ -84,7 +84,6 @@ instance PTryFrom PData PNodeValidatorAction
 
 data StakingConfig = StakingConfig
   { stakingInitUTxO :: TxOutRef
-  , rewardInitUTxO :: TxOutRef
   , freezeStake :: POSIXTime
   , endStaking :: POSIXTime
   , penaltyAddress :: Address
@@ -103,7 +102,6 @@ data PStakingConfig (s :: S)
           s
           ( PDataRecord
               '[ "stakingInitUTxO" ':= PTxOutRef
-               , "rewardInitUTxO" ':= PTxOutRef
                , "freezeStake" ':= PPOSIXTime
                , "endStaking" ':= PPOSIXTime
                , "penaltyAddress" ':= PAddress
