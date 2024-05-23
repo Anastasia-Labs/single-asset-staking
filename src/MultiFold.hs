@@ -36,6 +36,8 @@ import Types.StakingSet
 import Utils (
   fetchConfigDetails,
   pand'List,
+  paysAtleastValueToAddress,
+  pcountGivenScriptInputs,
   pcountOfUniqueTokens,
   pcountScriptInputs,
   pelemAt',
@@ -49,7 +51,7 @@ import Utils (
   ptryOwnOutput,
   ptxSignedByPkh,
   pvalueOfOneScott,
-  (#/=), paysAtleastValueToAddress, pcountGivenScriptInputs,
+  (#/=),
  )
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletC,
@@ -664,7 +666,7 @@ prewardFoldValidatorW = phoistAcyclic $
             let returnsReward = paysAtleastValueToAddress # (Value.passertPositive # (Value.psingleton # configF.rewardCS # configF.rewardTN # rewardsLeft)) # configF.penaltyAddress
 
             let rewardsReturned = pif (rewardsLeft #== 0) (pconstant True) (pany # returnsReward # infoF.outputs)
-             
+
             pure $
               pif
                 ( pand'List

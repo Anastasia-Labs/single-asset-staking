@@ -17,7 +17,7 @@ import Plutarch.Context (
   withRefTxId,
   withValue,
  )
-import Plutarch.Test.Precompiled (Expectation (Success, Failure), testEvalCase, tryFromPTerm)
+import Plutarch.Test.Precompiled (Expectation (Failure, Success), testEvalCase, tryFromPTerm)
 import PlutusLedgerApi.V1 (POSIXTimeRange, Value, toBuiltin)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 import PlutusLedgerApi.V2 (

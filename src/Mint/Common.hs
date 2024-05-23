@@ -248,14 +248,19 @@ pDeinit common config outs = P.do
   -- Mint checks:
   passert "Incorrect mint for DeInit" $
     correctNodeTokenMinted # common.ownCS # poriginNodeTN # (-1) # common.mint
-  
+
   configF <- pletFields @'["penaltyAddress", "stakeCS", "stakeTN"] config
 
   let stakeAmount = plam $ \val -> pvalueOf # val # configF.stakeCS # configF.stakeTN
 
   let returnsStake = plam $ \out ->
-        pletFields @["address", "value"] out $ \outF -> outF.address #== configF.penaltyAddress
-          #&& stakeAmount # nodeValue #<= stakeAmount # outF.value
+        pletFields @["address", "value"] out $ \outF ->
+          outF.address
+            #== configF.penaltyAddress
+            #&& stakeAmount
+            # nodeValue
+            #<= stakeAmount
+            # outF.value
 
   passert "Deinit must return stake back to penalty address" (pany # returnsStake # outs)
 
