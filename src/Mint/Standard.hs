@@ -57,7 +57,7 @@ mkStakingNodeMP = plam $ \configCS redm ctx -> P.do
         hasUtxoWithRef # configF.stakingInitUTxO # inputs
       pInit common
     PDeinit _ ->
-      pDeinit common
+      pDeinit common config outs
     PInsert action -> P.do
       act <- pletFields @'["keyToInsert", "coveringNode"] action
       let insertChecks =
