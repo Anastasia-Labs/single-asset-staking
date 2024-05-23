@@ -147,6 +147,23 @@ pcountScriptInputs =
             n
      in go # 0
 
+pcountGivenScriptInputs :: Term s (PScriptHash :--> PInteger :--> PBuiltinList PTxInInfo :--> PInteger)
+pcountGivenScriptInputs =
+  phoistAcyclic $
+    let go :: Term s (PScriptHash :--> PInteger :--> PBuiltinList PTxInInfo :--> PInteger)
+        go = plam $ \sh ->
+          (pfix #$ plam $ \self n ->
+            pelimList
+              ( \x xs ->
+                  let cred = pfield @"credential" # (pfield @"address" # (pfield @"resolved" # x))
+                  in pmatch cred $ \case
+                        PScriptCredential ((pfield @"_0" #) -> inputSH) -> pif (inputSH #== sh) (self # (n + 1) # xs) (self # n # xs)
+                        _ -> self # n # xs
+              )
+              n
+          )
+     in go
+
 pfoldl2 ::
   (PListLike listA, PListLike listB, PElemConstraint listA a, PElemConstraint listB b) =>
   Term s ((acc :--> a :--> b :--> acc) :--> acc :--> listA a :--> listB b :--> acc)

@@ -49,7 +49,7 @@ import Utils (
   ptryOwnOutput,
   ptxSignedByPkh,
   pvalueOfOneScott,
-  (#/=),
+  (#/=), paysAtleastValueToAddress, pcountGivenScriptInputs,
  )
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (
   pletC,
@@ -228,6 +228,7 @@ pfoldValidatorW = phoistAcyclic $
             PSpending ((pfield @"_0" #) -> ownRef) <- pmatchC ctxF.purpose
             let ownInput = ptryOwnInput # infoF.inputs # ownRef
             ownInputF <- pletFieldsC @'["address", "value"] ownInput
+            PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatchC (pfield @"credential" # ownInputF.address)
 
             let possibleCSs = pfindCurrencySymbolsByTokenName # ownInputF.value # commitFoldTN
                 commitCS = pheadSingleton # possibleCSs
@@ -240,6 +241,7 @@ pfoldValidatorW = phoistAcyclic $
                     [ ptxSignedByPkh # ownerPkh # infoF.signatories
                     , pfromData commitMinted #== -1
                     , pfield @"configTN" # datF.currNode #== configTN
+                    , pcountGivenScriptInputs # ownValHash # 0 # infoF.inputs #== 1
                     ]
                 )
                 (popaque $ pconstant ())
@@ -330,16 +332,11 @@ pfoldNodes = phoistAcyclic $
     let nodeInputs :: Term _ (PBuiltinList PTxOut)
         nodeInputs = pmap @PBuiltinList # plam (\i -> pfield @"resolved" # (pelemAt' # pfromData i # refIns)) # nodeIndices
         newCommitFoldState' = pfoldl # (pisSuccessor # config # configTN # nodeCS) # commitFoldState # nodeInputs
-        countOwnInputs =
-          plength
-            # ( pfilter @PBuiltinList
-                  # plam (\txInp -> (pfield @"address" # (pfield @"resolved" # txInp)) #== ownInputF.address)
-                  # info.inputs
-              )
+
     newCommitFoldState <- pmatchC newCommitFoldState'
     let foldChecks =
           pand'List
-            [ countOwnInputs #== 1
+            [ pcountGivenScriptInputs # ownValHash # 0 # info.inputs #== 1
             , pfromData info.mint #== mempty
             , currFoldNodeF.configTN #== configTN
             , newFoldNodeF.configTN #== configTN
