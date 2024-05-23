@@ -290,7 +290,7 @@ paysAtleastValueToAddress ::
 paysAtleastValueToAddress = phoistAcyclic $
   plam $ \val adr txOut ->
     pletFields @["address", "value"] txOut $ \txoFields ->
-      txoFields.address #== adr #&& txoFields.value #<= val
+      txoFields.address #== adr #&& val #<= txoFields.value
 
 paysToCredential :: Term s (PScriptHash :--> PTxOut :--> PBool)
 paysToCredential = phoistAcyclic $
