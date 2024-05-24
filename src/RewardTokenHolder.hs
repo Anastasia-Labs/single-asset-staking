@@ -49,11 +49,11 @@ pmintRewardTokenHolder = phoistAcyclic $
   plam $ \configCS redm ctx -> P.do
     ctxF <- pletFields @'["txInfo"] ctx
     PPair configTN config <- pmatch $ fetchConfigDetails # pfromData configCS # (pfield @"referenceInputs" # ctxF.txInfo)
-    configF <- pletFields @'["rewardInitUTxO"] config
+    configF <- pletFields @'["stakingInitUTxO"] config
 
     let red = pconvert @PTokenHolderMintAct redm
      in pmatch red $ \case
-          PMintHolder _ -> popaque $ pmintTokenHolder # configTN # configF.rewardInitUTxO # ctx
+          PMintHolder _ -> popaque $ pmintTokenHolder # configTN # configF.stakingInitUTxO # ctx
           PBurnHolder _ -> popaque $ pburnTokenHolder # ctx
 
 pburnTokenHolder :: Term s (PScriptContext :--> PUnit)

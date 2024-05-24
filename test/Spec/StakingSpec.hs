@@ -17,7 +17,7 @@ import Plutarch.Context (
   withRefTxId,
   withValue,
  )
-import Plutarch.Test.Precompiled (Expectation (Success), testEvalCase, tryFromPTerm)
+import Plutarch.Test.Precompiled (Expectation (Failure, Success), testEvalCase, tryFromPTerm)
 import PlutusLedgerApi.V1 (POSIXTimeRange, Value, toBuiltin)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 import PlutusLedgerApi.V2 (
@@ -85,9 +85,6 @@ minimumStake = 1_000
 stakingInitUTxO :: TxOutRef
 stakingInitUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 1
 
-rewardInitUTxO :: TxOutRef
-rewardInitUTxO = TxOutRef "2c6dbc95c1e96349c4131a9d19b029362542b31ffd2340ea85dd8f28e271ff6d" 2
-
 freezeStake :: POSIXTime
 freezeStake = POSIXTime 96_400_000
 
@@ -104,7 +101,6 @@ stakingConfig :: StakingConfig
 stakingConfig =
   StakingConfig
     { stakingInitUTxO
-    , rewardInitUTxO
     , freezeStake
     , endStaking
     , penaltyAddress
@@ -185,11 +181,29 @@ headUTXOAfterRFold =
           }
     ]
 
+returnStakeUTXO :: UTXO
+returnStakeUTXO =
+  mconcat
+    [ address penaltyAddress
+    , withValue (singleton "" "" 1_000_000 <> mkStakeValue 1000)
+    ]
+
+deinitScriptContextFail :: ScriptContext
+deinitScriptContextFail =
+  buildMinting' $
+    mconcat
+      [ input headUTXOAfterRFold
+      , mint burnOriginNode
+      , withMinting nodeCS
+      , referenceInput configUTXO
+      ]
+
 deinitScriptContext :: ScriptContext
 deinitScriptContext =
   buildMinting' $
     mconcat
       [ input headUTXOAfterRFold
+      , output returnStakeUTXO
       , mint burnOriginNode
       , withMinting nodeCS
       , referenceInput configUTXO
@@ -422,6 +436,12 @@ unitTest = tryFromPTerm "Unit Tests" (mkStakingNodeMPW # pconstant configCS) $ d
     Success
     [ PlutusTx.toData initAction
     , PlutusTx.toData initScriptContext
+    ]
+  testEvalCase
+    "Fail - Deinit Staking - Stake not returned"
+    Failure
+    [ PlutusTx.toData deinitAction
+    , PlutusTx.toData deinitScriptContextFail
     ]
   testEvalCase
     "Pass - Deinit Staking"
