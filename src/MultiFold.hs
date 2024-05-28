@@ -9,7 +9,7 @@ module MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, pre
 
 import Conversions (pconvert)
 import Plutarch.Api.V1 (PCredential (..))
-import Plutarch.Api.V1.Value (padaSymbol, padaToken, pforgetPositive, pnoAdaValue, pnormalize, pvalueOf)
+import Plutarch.Api.V1.Value (pforgetPositive, pnoAdaValue, pnormalize, pvalueOf)
 import Plutarch.Api.V1.Value qualified as Value
 import Plutarch.Api.V2 (
   PAddress (..),
@@ -31,7 +31,7 @@ import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Types.Classes
-import Types.Constants (commitFoldTN, foldingFee, poriginNodeTN, rewardFoldTN, rewardTokenHolderTN)
+import Types.Constants (commitFoldTN, nodeAda, poriginNodeTN, rewardFoldTN, rewardTokenHolderTN)
 import Types.StakingSet
 import Utils (
   fetchConfigDetails,
@@ -516,8 +516,6 @@ pmintRewardFold = phoistAcyclic $
     let foldOutDatum = pfromPDatum @PRewardFoldDatum # (pfield @"outputDatum" # foldOutputDatum)
     foldOutDatumF <- pletFieldsC @'["currNode", "totalRewardTokens", "totalStaked"] foldOutDatum
 
-    let foldingFeeVal = Value.psingleton # padaSymbol # padaToken # (-foldingFee)
-
     totalRewardTkns <- pletC foldOutDatumF.totalRewardTokens
     let foldInitChecks =
           pand'List
@@ -539,8 +537,10 @@ pmintRewardFold = phoistAcyclic $
             , pvalueOf # mintedValue # rewardConfigF.commitFoldCS # commitFoldTN #== -1
             , nodeInpDat #== nodeOutDat
             , nodeInputF.address #== nodeOutputF.address
-            , -- Taking folding fee from head node as an indicator that rewards fold has been initiated
-              pforgetPositive nodeInputF.value <> foldingFeeVal #== pforgetPositive nodeOutputF.value
+            , -- Head node ADA value not being equal to `nodeADA` is used as an indicator
+              -- that rewards fold has been initiated
+              pnoAdaValue # nodeInputF.value #== pnoAdaValue # nodeOutputF.value
+            , Value.plovelaceValueOf # nodeOutputF.value #/= nodeAda
             ]
     pure $
       pif
@@ -588,15 +588,16 @@ prewardSuccessor config configTN nodeCS totalRewardTokens totalStaked state inpu
       owedAdaValue = Value.psingleton # padaSymbol # padaToken # (-foldingFee)
       nodeKey = toScott $ pfromData nodeInDatF.key
 
-      successorChecks =
-        pand'List
-          [ ptraceIfFalse "Incorrect order of nodes" $ (accNodeF.next #== nodeKey)
-          , ptraceIfFalse "Incorrect reward amount" $ (inputValue <> owedRewardValue <> owedAdaValue) #== pforgetPositive nodeOutputValue
-          , ptraceIfFalse "Incorrect node output address" $ nodeOutputF.address #== nodeInputF.address
-          , ptraceIfFalse "Incorrect node configTN" $ nodeInDatF.configTN #== configTN
-          , ptraceIfFalse "Cannot udpate node datum" $ nodeOutputF.datum #== nodeInputF.datum
-          , ptraceIfFalse "Does not contain node token" $ pvalueOfOneScott # nodeCS # inputValue
-          ]
+                successorChecks =
+                  pand'List
+                    [ ptraceIfFalse "Incorrect order of nodes" $ (accNodeF.next #== nodeKey)
+                    , ptraceIfFalse "Incorrect reward amount" $ pnoAdaValue # (inputValue <> owedRewardValue) #== pnoAdaValue # (pforgetPositive nodeOutputValue)
+                    , ptraceIfFalse "ADA value cannnot be nodeAda" $ Value.plovelaceValueOf # nodeOutputValue #/= nodeAda
+                    , ptraceIfFalse "Incorrect node output address" $ nodeOutputF.address #== nodeInputF.address
+                    , ptraceIfFalse "Incorrect node configTN" $ nodeInDatF.configTN #== configTN
+                    , ptraceIfFalse "Cannot udpate node datum" $ nodeOutputF.datum #== nodeInputF.datum
+                    , ptraceIfFalse "Does not contain node token" $ pvalueOfOneScott # nodeCS # inputValue
+                    ]
 
       accState =
         pcon @PRewardsFoldState

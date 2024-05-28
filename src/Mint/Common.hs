@@ -36,7 +36,7 @@ import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import Types.Constants (minAda, nodeAda, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.Constants (nodeAda, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
 import Types.StakingSet (
   PNodeKey (..),
   PStakingConfig,
@@ -58,6 +58,7 @@ import Utils (
   phasDataCS,
   pheadSingleton,
   psingletonOfCS,
+  (#/=),
   (#>),
   (#>=),
  )
@@ -112,7 +113,7 @@ parseNodeOutputUtxo = phoistAcyclic $
     passert "Incorrect number of nodeTokens" $ amount #== 1
     passert "node is not ordered" $ validNode # datum
     passert "Incorrect token name" $ nodeKey #== datumKey
-    passert "Must have exactly 3 ADA" $
+    passert "ADA value must be nodeAda value" $
       plovelaceValueOf # value #== nodeAda
     -- todo maxStakeCommitment?
     pcon (PPair value datum)
@@ -236,12 +237,12 @@ pDeinit common config outs = P.do
   passert "Deinit must spend exactly one node" $ pnull # otherNodes
 
   PPair nodeValue _ <- pmatch headNode
-  {- Folding fee taken from head node during Reward Fold Init. nodeAda - foldingFee = minAda
+  {- Folding fee taken from head node during Reward Fold Init. nodeAda - foldingFee != nodeAda
      Once reward fold has started head node is not required. Claim can be processed for a node
      after it has undergone rewards fold (with the same minAda check) without any need to preserve
      integrity of the linked list (i.e without modifying the covering node).
   -}
-  passert "Rewards fold has not started yet" $ plovelaceValueOf # nodeValue #== minAda
+  passert "Rewards fold has not started yet" $ plovelaceValueOf # nodeValue #/= nodeAda
 
   -- Output Checks:
   passert "Deinit must not output nodes" $ pnull # common.nodeOutputs
@@ -399,9 +400,9 @@ pClaim common sigs pkToRemove = P.do
     This cannot be accomplished by checking count of unique tokens in the node,
     as it would fail in the scenario when stake token is same as reward token.
     Check if the node has paid folding fee to confirm it has undergone rewards fold.
-    nodeAda - foldingFee == minAda
+    nodeAda - foldingFee != nodeAda
   -}
-  passert "Claim broke phase rules" (plovelaceValueOf # removedValue #== minAda)
+  passert "Claim broke phase rules" (plovelaceValueOf # removedValue #/= nodeAda)
 
   pconstant ()
 
