@@ -20,7 +20,7 @@ import Plutarch.Api.V1.AssocMap qualified as AssocMap
 import Plutarch.Api.V1.Value (pvalueOf)
 import Plutarch.Api.V2 (
   PCurrencySymbol (..),
-  PScriptPurpose (PSpending),
+  PScriptPurpose (PSpending, PRewarding),
   PStakeValidator,
   PValidator,
  )
@@ -34,7 +34,8 @@ import Utils (fetchConfigDetails, passert, pcontainsCurrencySymbols, pfilterCSFr
 pDiscoverGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PStakeValidator)
 pDiscoverGlobalLogicW = phoistAcyclic $ plam $ \rewardFoldCS' _redeemer ctx -> P.do
   -- let rewardsIdx = pconvert @(PAsData PInteger) redeemer
-  ctxF <- pletFields @'["txInfo"] ctx
+  ctxF <- pletFields @'["txInfo", "purpose"] ctx
+  PRewarding (_) <- pmatch ctxF.purpose
   infoF <- pletFields @'["outputs"] ctxF.txInfo
   rewardFoldCS <- plet $ pfromData rewardFoldCS'
   -- let hasFoldToken = pany @PBuiltinList # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # rewardFoldCS) # infoF.inputs
