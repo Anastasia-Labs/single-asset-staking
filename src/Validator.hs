@@ -20,7 +20,7 @@ import Plutarch.Api.V1.AssocMap qualified as AssocMap
 import Plutarch.Api.V1.Value (pvalueOf)
 import Plutarch.Api.V2 (
   PCurrencySymbol (..),
-  PScriptPurpose (PSpending, PRewarding),
+  PScriptPurpose (PRewarding, PSpending),
   PStakeValidator,
   PValidator,
  )
